@@ -778,7 +778,7 @@ footer{
 
   var isMobile = window.innerWidth <= 768;
   var done     = false;
-  var TOTAL    = isMobile ? 1200 : 3500;
+  var TOTAL    = isMobile ? 4000 : 7000;
   var vs       = 0;
   var endTime  = 0;
   var rafId    = null;
@@ -861,8 +861,11 @@ footer{
         'position:fixed',
         'top:0','left:0','right:0','bottom:0',
         'z-index:9998',
-        'background:transparent',
-        'touch-action:none'   /* critical: tells iOS not to scroll */
+        /* rgba(0,0,0,0.001) not "transparent" — iOS skips hit-testing
+           on fully transparent elements so touchmove never fires     */
+        'background:rgba(0,0,0,0.001)',
+        'touch-action:none',
+        '-webkit-tap-highlight-color:transparent'
       ].join(';');
       document.body.appendChild(overlay);
 
@@ -876,7 +879,7 @@ footer{
         e.preventDefault();
         var dy = ty - e.touches[0].clientY; /* + swipe-up=forward, − swipe-down=reverse */
         ty = e.touches[0].clientY;
-        scrub(dy * 2.5);
+        scrub(dy * 3);   /* 3× multiplier — forward and reverse both feel responsive */
       }, {passive:false});
     }
 
