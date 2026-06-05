@@ -592,9 +592,16 @@ footer{
   </a>
 </nav>
 
-<!-- HERO — video only, no text, no buttons -->
+<!-- HERO — stop-scroll video -->
 <section class="hero" id="hero">
-  <video id="heroVideo" muted playsinline preload="auto" webkit-playsinline></video>
+  <video id="heroVideo"
+    src="images/hero.mov"
+    muted
+    playsinline
+    webkit-playsinline
+    preload="auto"
+    style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;">
+  </video>
   <div class="hero-progress" id="heroProgress"></div>
   <div class="scroll-cue" id="scrollCue">
     <span>Scroll</span>
@@ -757,161 +764,161 @@ footer{
 </div>
 
 <script>
-/* ════════════════════════════════════════════════════════════
-   HERO — Stop-Scroll. One instance. Bidirectional. Freezes.
-
-   BUG FIXES:
-   1. RAF wrote currentTime=0 every frame → iOS autoplayed 4×
-      Fix: only write currentTime when it meaningfully changed
-   2. iOS unloads off-screen video → resets to frame 0 on return
-      Fix: play+timeupdate guards after complete() hold endTime
-   3. Desktop wheel only fired on deltaY>0 — no reverse
-      Fix: pass e.deltaY directly (negative = scroll up = reverse)
-   4. Overlay was fully transparent → iOS skipped hit-testing
-      Fix: rgba(0,0,0,0.001) — visually invisible but hittable
-   ════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════
+   HERO STOP-SCROLL  ·  Fresh build  ·  hero.mov
+   ──────────────────────────────────────────────────────────
+   • Forward scroll  → video advances
+   • Reverse scroll  → video goes back
+   • Reaches end     → freezes permanently on last frame
+   • Scroll unlocks  → rest of page scrolls normally
+   • 60 fps RAF      → smooth, never janky
+   ══════════════════════════════════════════════════════════ */
 (function(){
-  /* ── Guard: run exactly once ── */
-  if(window.__heroInit) return;
-  window.__heroInit = true;
+  if(window.__HERO_INIT) return;   /* single instance guard */
+  window.__HERO_INIT = true;
 
   var hero  = document.getElementById('hero');
   var video = document.getElementById('heroVideo');
-  var prog  = document.getElementById('heroProgress');
+  var bar   = document.getElementById('heroProgress');
   var cue   = document.getElementById('scrollCue');
   if(!hero || !video) return;
 
-  var isMobile  = window.innerWidth <= 768;
-  var done      = false;
-  var TOTAL     = isMobile ? 4000 : 7000;
-  var vs        = 0;
-  var seekTarget= 0;
-  var endTime   = 0;
-  var rafId     = null;
-  var overlay   = null;
+  /* ── state ── */
+  var isMobile = ('ontouchstart' in window) || window.innerWidth <= 768;
+  var TOTAL    = 5000;          /* virtual scroll units for full video */
+  var vs       = 0;             /* current virtual scroll position     */
+  var target   = 0;             /* currentTime the RAF should seek to  */
+  var endT     = 0;             /* duration – 50ms (avoids ended-state)*/
+  var done     = false;
+  var rafId    = null;
+  var overlay  = null;
 
-  /* ── Video setup ── */
-  video.removeAttribute('loop');
-  video.removeAttribute('autoplay');
-  video.setAttribute('playsinline','');
-  video.setAttribute('webkit-playsinline','');
-  video.setAttribute('muted','');
-  video.setAttribute('preload','auto');
-  video.muted = true;
-  video.src = isMobile ? 'images/vape-mobile.mp4' : 'images/vape-desktop.mp4';
-  video.load();
-
-  /* ── RAF loop ─────────────────────────────────────────────
-     Runs at 60fps.
-     1. Kills any iOS autoplay (pause if playing)
-     2. Only seeks when seekTarget meaningfully changed —
-        avoids writing currentTime=0 every frame which was
-        triggering iOS autoplay and causing the 4× repeat   */
-  function rafLoop(){
+  /* ─────────────────────────────────────────────────────────
+     RAF LOOP  –  runs every ~16 ms
+     • keeps video paused (kills any iOS autoplay)
+     • seeks to `target` only when it has changed
+     No body/layout changes → hero never shrinks             */
+  function tick(){
     if(done) return;
-    rafId = requestAnimationFrame(rafLoop);
+    rafId = requestAnimationFrame(tick);
     if(!video.paused) video.pause();
-    if(Math.abs(video.currentTime - seekTarget) > 0.008){
-      video.currentTime = seekTarget;
+    if(Math.abs(video.currentTime - target) > 0.005){
+      video.currentTime = target;
     }
   }
 
-  /* ── Scrub: + forward, − reverse ── */
+  /* ─────────────────────────────────────────────────────────
+     SCRUB  –  called by wheel / touch with a signed delta
+     +delta → forward   –delta → reverse                     */
   function scrub(delta){
     if(done) return;
-    vs = Math.max(0, Math.min(TOTAL, vs + delta));
-    seekTarget = (vs / TOTAL) * endTime;
-    if(prog) prog.style.width = (vs / TOTAL * 100) + '%';
-    if(vs >= TOTAL) complete();
+    vs     = Math.max(0, Math.min(TOTAL, vs + delta));
+    target = (vs / TOTAL) * endT;
+    if(bar) bar.style.width = (vs / TOTAL * 100) + '%';
+    if(vs >= TOTAL) freeze();
   }
 
-  /* ── Complete ─────────────────────────────────────────────
-     Freezes on last frame permanently. Two guards prevent
-     iOS from resetting the video when it scrolls off-screen:
-     • play guard: if iOS ever fires play, immediately pause
-     • timeupdate guard: if currentTime resets, restore endTime */
-  function complete(){
+  /* ─────────────────────────────────────────────────────────
+     FREEZE  –  called once when animation completes
+     Cancels RAF, removes input handlers, locks video on
+     the last frame with two permanent iOS guards, then
+     releases the scroll so the page continues normally.     */
+  function freeze(){
     if(done) return;
     done = true;
+
     cancelAnimationFrame(rafId);
     window.removeEventListener('wheel', onWheel);
-    if(overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    if(overlay){ overlay.remove(); overlay = null; }
 
-    /* Lock to end frame */
-    video.currentTime = endTime;
+    /* hard-lock to last frame */
+    video.currentTime = endT;
     video.pause();
 
-    /* Guard 1: prevent any future play() calls */
-    video.addEventListener('play', function keepPaused(){
+    /* iOS guard A – if browser ever fires play(), kill it */
+    video.addEventListener('play', function(){
       video.pause();
-      video.currentTime = endTime;
+      video.currentTime = endT;
     });
 
-    /* Guard 2: if iOS unloads + reloads video (off-screen → on-screen)
-       it resets currentTime to 0 — this watcher restores endTime */
-    video.addEventListener('timeupdate', function keepAtEnd(){
-      if(video.currentTime < endTime - 0.5){
-        video.currentTime = endTime;
+    /* iOS guard B – if iOS unloads/reloads the video element
+       while off-screen, currentTime resets to 0; restore it */
+    video.addEventListener('timeupdate', function(){
+      if(video.currentTime < endT - 0.5){
+        video.currentTime = endT;
         video.pause();
       }
     });
 
+    /* UI feedback */
     if(cue) cue.style.opacity = '0';
-    if(prog){
-      prog.style.width = '100%';
-      setTimeout(function(){ prog.style.opacity = '0'; }, 400);
+    if(bar){
+      bar.style.width = '100%';
+      setTimeout(function(){ bar.style.opacity = '0'; }, 500);
     }
 
-    /* Brief freeze on last frame, then release scroll */
+    /* brief pause on last frame → then jump past hero */
     setTimeout(function(){
-      window.scrollTo(0, hero.offsetTop + hero.offsetHeight);
-    }, 600);
+      var top = hero.offsetTop + hero.offsetHeight;
+      window.scrollTo({ top: top, behavior: 'instant' });
+    }, 700);
   }
 
-  /* ── Desktop: wheel (both directions) ── */
+  /* ── desktop: mouse wheel / trackpad ── */
   function onWheel(e){
     if(done) return;
     e.preventDefault();
-    scrub(e.deltaY); /* negative deltaY = scroll up = reverse ✓ */
+    scrub(e.deltaY);           /* +deltaY = scroll down = forward
+                                  –deltaY = scroll up  = reverse  */
   }
 
-  /* ── Init ── */
+  /* ── init: wait for video metadata ── */
   video.addEventListener('loadedmetadata', function(){
     var dur = video.duration;
-    if(!dur || isNaN(dur) || dur === Infinity) return;
-    endTime    = Math.max(0, dur - 0.05);
-    seekTarget = 0;
+    if(!dur || isNaN(dur) || !isFinite(dur)) return;
+
+    endT   = Math.max(0, dur - 0.05);
+    target = 0;
     video.currentTime = 0;
     video.pause();
 
-    rafId = requestAnimationFrame(rafLoop);
-    window.addEventListener('wheel', onWheel, {passive:false});
+    /* start RAF guard */
+    rafId = requestAnimationFrame(tick);
 
-    if(isMobile){
-      /* Overlay: captures touch without touching body layout.
-         rgba(0,0,0,0.001) = visually invisible but iOS includes
-         it in hit-testing (pure transparent elements are skipped) */
-      overlay = document.createElement('div');
-      overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;' +
-        'z-index:9998;background:rgba(0,0,0,0.001);touch-action:none;' +
-        '-webkit-tap-highlight-color:transparent;';
-      document.body.appendChild(overlay);
+    /* desktop wheel listener */
+    window.addEventListener('wheel', onWheel, { passive: false });
 
-      var ty = 0;
-      overlay.addEventListener('touchstart', function(e){
-        ty = e.touches[0].clientY;
-      }, {passive:true});
+    /* ── mobile: invisible overlay ─────────────────────────
+       Sits on top of everything (z-index 9999).
+       background rgba(0,0,0,0.001) forces iOS hit-testing
+       (fully transparent elements are skipped by iOS).
+       touch-action:none tells iOS not to scroll.
+       No changes to body/html layout → hero never shrinks. */
+    overlay = document.createElement('div');
+    overlay.style.cssText =
+      'position:fixed;top:0;left:0;right:0;bottom:0;' +
+      'z-index:9999;' +
+      'background:rgba(0,0,0,0.001);' +
+      'touch-action:none;' +
+      '-webkit-tap-highlight-color:transparent;';
+    document.body.appendChild(overlay);
 
-      overlay.addEventListener('touchmove', function(e){
-        if(done) return;
-        e.preventDefault();
-        var dy = ty - e.touches[0].clientY; /* + up=forward  − down=reverse */
-        ty = e.touches[0].clientY;
-        scrub(dy * 3);
-      }, {passive:false});
-    }
+    var ty = 0;
 
-  }, {once:true});
+    overlay.addEventListener('touchstart', function(e){
+      ty = e.touches[0].clientY;
+    }, { passive: true });
+
+    overlay.addEventListener('touchmove', function(e){
+      if(done) return;
+      e.preventDefault();
+      var dy = ty - e.touches[0].clientY;  /* + = swipe up   = forward
+                                              – = swipe down  = reverse */
+      ty = e.touches[0].clientY;
+      scrub(dy * 3);
+    }, { passive: false });
+
+  }, { once: true });
 
 })();
 
