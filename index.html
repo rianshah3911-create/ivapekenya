@@ -594,9 +594,7 @@ footer{
 
 <!-- HERO — video only, no text, no buttons -->
 <section class="hero" id="hero">
-  <video muted playsinline preload="auto" id="heroVideo">
-    <source src="images/vape-desktop.mp4" type="video/mp4">
-  </video>
+  <video id="heroVideo" muted playsinline preload="auto" webkit-playsinline></video>
   <div class="hero-progress" id="heroProgress"></div>
   <div class="scroll-cue" id="scrollCue">
     <span>Scroll</span>
@@ -760,125 +758,128 @@ footer{
 
 <script>
 /* ════════════════════════════════════════════════════════════
-   HERO — Premium Apple-style scroll-scrub
-   Architecture: GSAP scrub:1.5 (delta-time corrected, 60fps)
-   → onUpdate fires once per GSAP tick → sets video.currentTime
-   No manual RAF. No lerp. No console spam. No conflicts.
+   HERO — scroll-scrub video (desktop: GSAP, mobile: sticky+scroll)
    ════════════════════════════════════════════════════════════ */
 (function(){
   gsap.registerPlugin(ScrollTrigger);
-
-  /* Prevent GSAP compensating for lag spikes by skipping frames */
   gsap.ticker.lagSmoothing(0);
 
+  var hero      = document.getElementById('hero');
   var video     = document.getElementById('heroVideo');
   var progressEl= document.getElementById('heroProgress');
   var scrollCue = document.getElementById('scrollCue');
+  if(!video || !hero) return;
 
-  if(!video) return;
+  /* ── Detect device ── */
+  var isMobile = window.innerWidth <= 768;
 
-  /* ── 1. Detect device & set correct video source ── */
-  var isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
-                 || window.innerWidth <= 768;
+  /* ── Load correct video — listener BEFORE load() to avoid race ── */
+  video.setAttribute('playsinline','');
+  video.setAttribute('muted','');
+  video.setAttribute('preload','auto');
+  video.muted = true;
 
-  video.innerHTML = '';
-  var s = document.createElement('source');
-  s.src  = isMobile ? 'images/vape-mobile.mp4' : 'images/vape-desktop.mp4';
-  s.type = 'video/mp4';
-  video.appendChild(s);
-  video.muted       = true;
-  video.playsInline = true;
-  video.preload     = 'auto';
-  /* iOS Safari needs setAttribute for playsInline to register */
-  video.setAttribute('playsinline', '');
-  video.setAttribute('muted', '');
-  video.load();
+  var src = isMobile ? 'images/vape-mobile.mp4' : 'images/vape-desktop.mp4';
+  console.log('[Hero] loading:', src);
 
-  console.log('[Hero] device:', isMobile ? 'mobile → vape-mobile.mp4' : 'desktop → vape-desktop.mp4');
-
-  /* ── 2. Init once metadata is ready ── */
-  function init(){
-    var duration = video.duration;
-    if(!duration || isNaN(duration)) return;
-
-    console.log('[Hero] ready — duration:', duration.toFixed(2) + 's');
-
-    /* Stop autoplay — scroll owns playback */
+  video.addEventListener('loadedmetadata', function onMeta(){
+    video.removeEventListener('loadedmetadata', onMeta);
+    var dur = video.duration;
+    if(!dur || isNaN(dur)){ console.warn('[Hero] bad duration'); return; }
+    console.log('[Hero] duration:', dur.toFixed(2)+'s');
     video.pause();
     video.currentTime = 0;
+    isMobile ? initMobile(dur) : initDesktop(dur);
+  });
 
-    /* Scroll distance + scrub tuned per device
-       Mobile: shorter distance + tighter scrub = responsive to touch
-       Desktop: longer distance + 1.5s scrub = cinematic glide        */
-    var scrollDist = isMobile ? 4000 : 5000;
-    var scrubVal   = isMobile ? 0.8  : 1.5;
-    var finished   = false;   /* once true, video is permanently locked on last frame */
+  /* Set src AFTER attaching listener */
+  video.src = src;
+  video.load();
 
-    /* ── 3. GSAP ScrollTrigger + scrub ──────────────────────────
-       scrub: N  → GSAP tweens its internal progress toward scroll
-                    target over N seconds (delta-time corrected).
-       onUpdate fires once per GSAP ticker frame with the already-
-       smoothed value — we set video.currentTime exactly once/frame */
+  /* ════════════════════════════════════
+     DESKTOP — GSAP ScrollTrigger pin
+     ════════════════════════════════════ */
+  function initDesktop(dur){
+    var finished = false;
+
     ScrollTrigger.create({
       trigger            : '#hero',
       start              : 'top top',
-      end                : '+=' + scrollDist,
+      end                : '+=5000',
       pin                : true,
-      scrub              : scrubVal,
+      scrub              : 1.5,
       invalidateOnRefresh: true,
 
       onEnter: function(){
-        /* Fade scroll cue — only runs once */
-        if(scrollCue)
-          gsap.to(scrollCue, { opacity:0, duration:0.6, ease:'power2.out' });
+        if(scrollCue) gsap.to(scrollCue,{opacity:0,duration:0.6,ease:'power2.out'});
       },
-
       onUpdate: function(self){
-        if(finished){
-          /* Keep forcing end frame — prevents GSAP scrub tween
-             from reverting currentTime when trigger is passed */
-          video.currentTime = duration;
-          return;
-        }
-        video.currentTime = self.progress * duration;
-        if(progressEl)
-          progressEl.style.width = (self.progress * 100) + '%';
+        if(finished){ video.currentTime = dur; return; }
+        video.currentTime = self.progress * dur;
+        if(progressEl) progressEl.style.width = (self.progress*100)+'%';
       },
-
       onLeave: function(){
-        /* Set flag FIRST — onUpdate will immediately start
-           clamping to duration on next GSAP tick */
         finished = true;
-        video.currentTime = duration;
+        video.currentTime = dur;
         video.pause();
-        if(progressEl)
-          gsap.to(progressEl, { opacity:0, duration:0.6, delay:0.2, ease:'power2.out' });
-        /* NOTE: do NOT call self.kill() — killing a scrub ScrollTrigger
-           reverts the internal tween to progress=0, firing onUpdate
-           one final time with progress=0 and resetting the video.
-           The finished flag + forced currentTime=duration handles
-           everything safely without kill(). */
+        if(progressEl) gsap.to(progressEl,{opacity:0,duration:0.6,delay:0.2});
       },
-
       onEnterBack: function(){
-        /* Never rewind — finished flag prevents onUpdate from
-           responding even if GSAP tries to scrub backward */
         if(finished) return;
-        if(progressEl) gsap.set(progressEl, { opacity:1 });
+        if(progressEl) gsap.set(progressEl,{opacity:1});
       }
     });
 
-    /* Force recalculate after fonts / images settle */
     ScrollTrigger.refresh();
-    console.log('[Hero] ScrollTrigger live — scroll distance:', scrollDist + 'px');
+    console.log('[Hero] desktop ScrollTrigger live');
   }
 
-  /* ── 4. Wait for metadata ── */
-  if(video.readyState >= 1 && video.duration > 0){
-    /* Already loaded (cached) */
-    init();
-  } else {
-    video.addEventListener('loadedmetadata', init, { once: true });
+  /* ════════════════════════════════════════════════════════
+     MOBILE — CSS sticky + passive scroll listener
+     Much more reliable than GSAP pin on iOS Safari.
+     Hero stays sticky, spacer div below creates scroll room.
+     ════════════════════════════════════════════════════════ */
+  function initMobile(dur){
+    var SCROLL_DIST = 4000;
+    var finished    = false;
+
+    /* 1. Make hero sticky so it pins without GSAP touching the DOM */
+    hero.style.position = 'sticky';
+    hero.style.top      = '0px';
+    hero.style.zIndex   = '1';
+
+    /* 2. Insert spacer AFTER hero to create 4000px of scroll room */
+    var spacer = document.createElement('div');
+    spacer.id  = 'heroSpacer';
+    spacer.style.cssText = 'height:'+SCROLL_DIST+'px;display:block;';
+    hero.parentNode.insertBefore(spacer, hero.nextSibling);
+
+    /* 3. Scroll listener — passive = no jank, no fighting browser */
+    var heroOffsetTop = hero.offsetTop;
+
+    function onScroll(){
+      if(finished) return;
+
+      var scrolled  = window.scrollY - heroOffsetTop;
+      var progress  = Math.max(0, Math.min(1, scrolled / SCROLL_DIST));
+
+      video.currentTime = progress * dur;
+      if(progressEl) progressEl.style.width = (progress*100)+'%';
+
+      if(progress >= 1){
+        finished = true;
+        video.currentTime = dur;
+        video.pause();
+        if(scrollCue) scrollCue.style.opacity = '0';
+        if(progressEl) gsap.to(progressEl,{opacity:0,duration:0.6,delay:0.2});
+        window.removeEventListener('scroll', onScroll);
+        console.log('[Hero] mobile animation complete — locked on last frame');
+      }
+    }
+
+    if(scrollCue) gsap.to(scrollCue,{opacity:1,duration:0});
+    window.addEventListener('scroll', onScroll, { passive: true });
+    console.log('[Hero] mobile sticky scroll live — spacer:', SCROLL_DIST+'px');
   }
 
 })();
