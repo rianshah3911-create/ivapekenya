@@ -758,33 +758,39 @@ footer{
 
 <script>
 /* ════════════════════════════════════════════════════════════
-   HERO — Stop-Scroll. Bidirectional scrub. Plays once. Freezes.
+   HERO — Stop-Scroll. One instance. Bidirectional. Freezes.
 
-   SHRINK FIX: never touch body layout. Instead, inject a
-   transparent fixed overlay that captures all touch events.
-   No layout reflow = no hero shrinking.
-
-   REPEAT FIX: RAF at 60fps pauses video every 16ms.
-
-   REVERSE FIX: removed the > 0.015 threshold — every seek
-   applied immediately, even tiny backward movements.
+   BUG FIXES:
+   1. RAF wrote currentTime=0 every frame → iOS autoplayed 4×
+      Fix: only write currentTime when it meaningfully changed
+   2. iOS unloads off-screen video → resets to frame 0 on return
+      Fix: play+timeupdate guards after complete() hold endTime
+   3. Desktop wheel only fired on deltaY>0 — no reverse
+      Fix: pass e.deltaY directly (negative = scroll up = reverse)
+   4. Overlay was fully transparent → iOS skipped hit-testing
+      Fix: rgba(0,0,0,0.001) — visually invisible but hittable
    ════════════════════════════════════════════════════════════ */
 (function(){
+  /* ── Guard: run exactly once ── */
+  if(window.__heroInit) return;
+  window.__heroInit = true;
+
   var hero  = document.getElementById('hero');
   var video = document.getElementById('heroVideo');
   var prog  = document.getElementById('heroProgress');
   var cue   = document.getElementById('scrollCue');
   if(!hero || !video) return;
 
-  var isMobile = window.innerWidth <= 768;
-  var done     = false;
-  var TOTAL    = isMobile ? 4000 : 7000;
-  var vs       = 0;
-  var endTime  = 0;
-  var rafId    = null;
-  var overlay  = null;
+  var isMobile  = window.innerWidth <= 768;
+  var done      = false;
+  var TOTAL     = isMobile ? 4000 : 7000;
+  var vs        = 0;
+  var seekTarget= 0;
+  var endTime   = 0;
+  var rafId     = null;
+  var overlay   = null;
 
-  /* ── Video ── */
+  /* ── Video setup ── */
   video.removeAttribute('loop');
   video.removeAttribute('autoplay');
   video.setAttribute('playsinline','');
@@ -795,16 +801,22 @@ footer{
   video.src = isMobile ? 'images/vape-mobile.mp4' : 'images/vape-desktop.mp4';
   video.load();
 
-  /* ── RAF: pauses video + applies seek every 16ms ── */
-  var seekTarget = 0;
+  /* ── RAF loop ─────────────────────────────────────────────
+     Runs at 60fps.
+     1. Kills any iOS autoplay (pause if playing)
+     2. Only seeks when seekTarget meaningfully changed —
+        avoids writing currentTime=0 every frame which was
+        triggering iOS autoplay and causing the 4× repeat   */
   function rafLoop(){
     if(done) return;
     rafId = requestAnimationFrame(rafLoop);
-    if(!video.paused) video.pause();       /* kill any autoplay */
-    video.currentTime = seekTarget;        /* apply seek — no threshold, instant */
+    if(!video.paused) video.pause();
+    if(Math.abs(video.currentTime - seekTarget) > 0.008){
+      video.currentTime = seekTarget;
+    }
   }
 
-  /* ── Scrub: bidirectional ── */
+  /* ── Scrub: + forward, − reverse ── */
   function scrub(delta){
     if(done) return;
     vs = Math.max(0, Math.min(TOTAL, vs + delta));
@@ -813,60 +825,76 @@ footer{
     if(vs >= TOTAL) complete();
   }
 
-  /* ── Complete ── */
+  /* ── Complete ─────────────────────────────────────────────
+     Freezes on last frame permanently. Two guards prevent
+     iOS from resetting the video when it scrolls off-screen:
+     • play guard: if iOS ever fires play, immediately pause
+     • timeupdate guard: if currentTime resets, restore endTime */
   function complete(){
     if(done) return;
     done = true;
     cancelAnimationFrame(rafId);
     window.removeEventListener('wheel', onWheel);
-    /* Remove overlay — restores full interaction */
     if(overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+
+    /* Lock to end frame */
     video.currentTime = endTime;
     video.pause();
+
+    /* Guard 1: prevent any future play() calls */
+    video.addEventListener('play', function keepPaused(){
+      video.pause();
+      video.currentTime = endTime;
+    });
+
+    /* Guard 2: if iOS unloads + reloads video (off-screen → on-screen)
+       it resets currentTime to 0 — this watcher restores endTime */
+    video.addEventListener('timeupdate', function keepAtEnd(){
+      if(video.currentTime < endTime - 0.5){
+        video.currentTime = endTime;
+        video.pause();
+      }
+    });
+
     if(cue) cue.style.opacity = '0';
-    if(prog){ prog.style.width='100%'; setTimeout(function(){ prog.style.opacity='0'; },400); }
-    /* Scroll to content below hero after brief freeze */
+    if(prog){
+      prog.style.width = '100%';
+      setTimeout(function(){ prog.style.opacity = '0'; }, 400);
+    }
+
+    /* Brief freeze on last frame, then release scroll */
     setTimeout(function(){
       window.scrollTo(0, hero.offsetTop + hero.offsetHeight);
-    }, 500);
+    }, 600);
   }
 
-  /* ── Desktop: wheel ── */
+  /* ── Desktop: wheel (both directions) ── */
   function onWheel(e){
     if(done) return;
     e.preventDefault();
-    scrub(e.deltaY);
+    scrub(e.deltaY); /* negative deltaY = scroll up = reverse ✓ */
   }
 
+  /* ── Init ── */
   video.addEventListener('loadedmetadata', function(){
     var dur = video.duration;
-    if(!dur || isNaN(dur) || dur===Infinity) return;
+    if(!dur || isNaN(dur) || dur === Infinity) return;
     endTime    = Math.max(0, dur - 0.05);
     seekTarget = 0;
     video.currentTime = 0;
     video.pause();
 
-    /* Start RAF guard */
     rafId = requestAnimationFrame(rafLoop);
-
-    /* Desktop wheel */
     window.addEventListener('wheel', onWheel, {passive:false});
 
-    /* Mobile: transparent overlay captures touch WITHOUT touching body layout
-       so the hero never reflows/shrinks. touch-action:none tells iOS
-       not to handle this touch for scrolling. */
     if(isMobile){
+      /* Overlay: captures touch without touching body layout.
+         rgba(0,0,0,0.001) = visually invisible but iOS includes
+         it in hit-testing (pure transparent elements are skipped) */
       overlay = document.createElement('div');
-      overlay.style.cssText = [
-        'position:fixed',
-        'top:0','left:0','right:0','bottom:0',
-        'z-index:9998',
-        /* rgba(0,0,0,0.001) not "transparent" — iOS skips hit-testing
-           on fully transparent elements so touchmove never fires     */
-        'background:rgba(0,0,0,0.001)',
-        'touch-action:none',
-        '-webkit-tap-highlight-color:transparent'
-      ].join(';');
+      overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;' +
+        'z-index:9998;background:rgba(0,0,0,0.001);touch-action:none;' +
+        '-webkit-tap-highlight-color:transparent;';
       document.body.appendChild(overlay);
 
       var ty = 0;
@@ -877,9 +905,9 @@ footer{
       overlay.addEventListener('touchmove', function(e){
         if(done) return;
         e.preventDefault();
-        var dy = ty - e.touches[0].clientY; /* + swipe-up=forward, − swipe-down=reverse */
+        var dy = ty - e.touches[0].clientY; /* + up=forward  − down=reverse */
         ty = e.touches[0].clientY;
-        scrub(dy * 3);   /* 3× multiplier — forward and reverse both feel responsive */
+        scrub(dy * 3);
       }, {passive:false});
     }
 
