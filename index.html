@@ -881,7 +881,16 @@ footer{
     endT   = Math.max(0, dur - 0.05);
     target = 0;
     video.currentTime = 0;
-    video.pause();
+
+    /* Play then immediately pause — forces browser to decode + display
+       the first frame. Without this, Chrome shows a black screen
+       because it won't render any frame until play() is called once. */
+    video.play().then(function(){
+      video.pause();
+      video.currentTime = 0;
+    }).catch(function(){
+      video.pause();
+    });
 
     /* start RAF guard */
     rafId = requestAnimationFrame(tick);
