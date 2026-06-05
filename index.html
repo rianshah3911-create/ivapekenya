@@ -105,7 +105,17 @@ nav{
   position:absolute;bottom:0;left:0;
   height:2px;width:0%;z-index:10;
   background:linear-gradient(to right,var(--accent1),var(--accent2));
-  transition:width 0.08s linear;
+  /* NO CSS transition — JS drives this at 60fps, transition causes double-animation conflict */
+  will-change:width;
+}
+
+/* GPU-promote video element — compositing on GPU, not CPU */
+#heroVideo{
+  will-change:contents;
+  transform:translateZ(0);
+  -webkit-transform:translateZ(0);
+  backface-visibility:hidden;
+  -webkit-backface-visibility:hidden;
 }
 
 /* Scroll cue */
@@ -488,7 +498,7 @@ footer{
 /* ── RESPONSIVE TABLET ── */
 @media(max-width:1100px){
   nav{padding:0 20px;gap:20px;}
-  .hero{margin-top:60px;}
+  .hero{margin-top:0;}
   .about-section,.why-section{grid-template-columns:1fr;gap:40px;padding:70px 32px;}
   .products-section{padding:60px 32px 80px;}
   .products-grid{grid-template-columns:repeat(2,1fr);}
@@ -513,9 +523,11 @@ footer{
   .logo{font-size:1.3rem;letter-spacing:3px;}
   .btn-wa-nav{padding:7px 14px;font-size:0.65rem;}
 
-  /* Hero — GSAP pins it, just control object-position */
+  /* Hero — shorter on mobile so content below is reachable */
   .hero{
-    height:100vh;
+    height:60vh;
+    min-height:320px;
+    max-height:480px;
   }
   .hero video{
     object-position:70% center;
@@ -747,11 +759,17 @@ footer{
 </div>
 
 <script>
-/* ════════════════════════════════════════════════════
-   HERO — Apple-style smooth scroll-scrub via GSAP
-   ════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════
+   HERO — Premium Apple-style scroll-scrub
+   Architecture: GSAP scrub:1.5 (delta-time corrected, 60fps)
+   → onUpdate fires once per GSAP tick → sets video.currentTime
+   No manual RAF. No lerp. No console spam. No conflicts.
+   ════════════════════════════════════════════════════════════ */
 (function(){
   gsap.registerPlugin(ScrollTrigger);
+
+  /* Prevent GSAP compensating for lag spikes by skipping frames */
+  gsap.ticker.lagSmoothing(0);
 
   var video     = document.getElementById('heroVideo');
   var progressEl= document.getElementById('heroProgress');
@@ -759,89 +777,70 @@ footer{
 
   if(!video) return;
 
-  /* ── Load video ── */
+  /* ── 1. Set video source ── */
   video.innerHTML = '';
   var s = document.createElement('source');
   s.src  = 'images/vape-desktop.mp4';
   s.type = 'video/mp4';
   video.appendChild(s);
-  video.muted    = true;
+  video.muted       = true;
   video.playsInline = true;
-  video.preload  = 'auto';
+  video.preload     = 'auto';
   video.load();
 
-  /* ── RAF lerp loop — decouples scroll from video seek ──
-     targetTime  = where scroll says video should be
-     displayTime = smoothly lerping toward targetTime
-     We only call video.currentTime inside the RAF loop,
-     never directly from the scroll event.               */
-  var targetTime  = 0;
-  var displayTime = 0;
-  var duration    = 0;
-  var rafId       = null;
-  var LERP        = 0.12;   /* 0 = instant, 1 = never moves — 0.12 feels premium */
+  /* ── 2. Init once metadata is ready ── */
+  function init(){
+    var duration = video.duration;
+    if(!duration || isNaN(duration)) return;
 
-  function rafLoop(){
-    rafId = requestAnimationFrame(rafLoop);
+    console.log('[Hero] ready — duration:', duration.toFixed(2) + 's');
 
-    /* lerp displayTime toward targetTime */
-    var diff = targetTime - displayTime;
-    if(Math.abs(diff) < 0.001){
-      displayTime = targetTime;
-    } else {
-      displayTime += diff * LERP;
-    }
-
-    /* only seek if meaningfully different — avoids redundant decodes */
-    if(Math.abs(video.currentTime - displayTime) > 0.008){
-      video.currentTime = displayTime;
-    }
-  }
-
-  function init(dur){
-    duration = dur;
-    console.log('[Hero] duration:', duration);
-
+    /* Stop autoplay — scroll owns playback */
     video.pause();
     video.currentTime = 0;
 
-    /* Start the RAF loop once */
-    if(rafId) cancelAnimationFrame(rafId);
-    rafLoop();
+    /* Mobile gets shorter scroll distance — feels snappy not endless */
+    var isMobile     = window.innerWidth <= 768;
+    var scrollDist   = isMobile ? 2500 : 5000;
 
-    /* ── ScrollTrigger ──
-       scrub:true = direct 1:1 mapping (no GSAP lag)
-       We handle smoothing ourselves in the RAF loop    */
+    /* ── 3. GSAP ScrollTrigger + scrub ──────────────────────────
+       scrub: 1.5  → GSAP internally tweens progress toward the
+                      scroll target over 1.5s using its own RAF
+                      ticker (delta-time corrected, 60fps stable).
+                      This IS the lerp — no manual RAF needed.
+
+       onUpdate fires once per GSAP ticker frame (not per scroll
+       event) with the already-smoothed progress value.
+       We set video.currentTime exactly once per frame.          */
     ScrollTrigger.create({
-      trigger     : '#hero',
-      start       : 'top top',
-      end         : '+=5000',
-      pin         : true,
-      scrub       : true,
-      anticipatePin: 1,
+      trigger          : '#hero',
+      start            : 'top top',
+      end              : '+=' + scrollDist,
+      pin              : true,
+      scrub            : 1.5,
+      invalidateOnRefresh: true,   /* recalculates on resize — prevents layout shifts */
 
       onUpdate: function(self){
-        /* Only update the TARGET — RAF loop moves video smoothly */
-        targetTime = self.progress * duration;
+        /* One seek per GSAP frame. GSAP's smoothed progress
+           means we never jump more than ~1 frame per tick.    */
+        video.currentTime = self.progress * duration;
 
+        /* Update progress bar — direct width, no CSS transition */
         if(progressEl)
           progressEl.style.width = (self.progress * 100) + '%';
-
-        console.log('[Hero] scroll progress:', self.progress.toFixed(3),
-                    '| target:', targetTime.toFixed(3),
-                    '| display:', displayTime.toFixed(3));
       },
 
       onEnter: function(){
-        if(scrollCue) gsap.to(scrollCue, { opacity:0, duration:0.5 });
+        /* Fade scroll cue — only runs once */
+        if(scrollCue)
+          gsap.to(scrollCue, { opacity:0, duration:0.6, ease:'power2.out' });
       },
 
       onLeave: function(){
-        if(progressEl) gsap.to(progressEl, { opacity:0, duration:0.5, delay:0.3 });
-        /* Snap exactly to end frame */
-        targetTime  = duration;
-        displayTime = duration;
+        /* Snap to last frame — prevents video hanging on penultimate frame */
         video.currentTime = duration;
+        if(progressEl)
+          gsap.to(progressEl, { opacity:0, duration:0.6, delay:0.2, ease:'power2.out' });
       },
 
       onEnterBack: function(){
@@ -849,19 +848,19 @@ footer{
       }
     });
 
+    /* Force recalculate after fonts / images settle */
     ScrollTrigger.refresh();
-    console.log('[Hero] ScrollTrigger ready');
+    console.log('[Hero] ScrollTrigger live — scroll distance:', scrollDist + 'px');
   }
 
-  /* Wait for metadata → duration available */
-  video.addEventListener('loadedmetadata', function(){
-    init(video.duration);
-  });
-
-  /* Safari sometimes fires loadedmetadata before addEventListener */
+  /* ── 4. Wait for metadata ── */
   if(video.readyState >= 1 && video.duration > 0){
-    init(video.duration);
+    /* Already loaded (cached) */
+    init();
+  } else {
+    video.addEventListener('loadedmetadata', init, { once: true });
   }
+
 })();
 
 /* ── NAV ── */
