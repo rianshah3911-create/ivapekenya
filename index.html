@@ -759,14 +759,8 @@ footer{
 <script>
 /* ════════════════════════════════════════════════════════════
    HERO — Stop-Scroll. Bidirectional. Plays once. Freezes.
-
-   WHY IT WAS REPEATING:
-   accum only increased — never decreased. Swipe up/down/up
-   caused the same video range to replay each upswipe.
-   Fix: vs (virtual scroll) goes both ways. Scroll down →
-   video advances. Scroll up → video REVERSES. complete()
-   only fires when vs reaches TOTAL going forward. Once done,
-   page unlocks and video is permanently frozen.
+   RAF loop runs at 60fps: pauses + seeks in the same tick.
+   iOS gets at most 16ms of play between frames = < 1 frame.
    ════════════════════════════════════════════════════════════ */
 (function(){
   var hero  = document.getElementById('hero');
@@ -775,10 +769,13 @@ footer{
   var cue   = document.getElementById('scrollCue');
   if(!hero || !video) return;
 
-  var isMobile = window.innerWidth <= 768;
-  var done  = false;
-  var TOTAL = isMobile ? 2500 : 5000;
-  var vs    = 0;   /* virtual scroll: 0 → TOTAL, bidirectional */
+  var isMobile  = window.innerWidth <= 768;
+  var done      = false;
+  var TOTAL     = isMobile ? 2500 : 5000;
+  var vs        = 0;          /* virtual scroll, bidirectional 0↔TOTAL */
+  var targetTime= 0;          /* RAF drives video toward this */
+  var endTime   = 0;
+  var rafId     = null;
 
   /* ── Video setup ── */
   video.removeAttribute('loop');
@@ -791,7 +788,21 @@ footer{
   video.src = isMobile ? 'images/vape-mobile.mp4' : 'images/vape-desktop.mp4';
   video.load();
 
-  /* ── Scroll lock (body position:fixed — only reliable iOS method) ── */
+  /* ── RAF loop: 60fps pause + seek in ONE tick ──────────────────
+     setInterval every 50ms gave iOS 50ms of free play = full loops.
+     RAF every 16ms gives iOS < 1 video frame of play.            */
+  function rafLoop(){
+    if(done){ return; }
+    rafId = requestAnimationFrame(rafLoop);
+    /* 1. Kill any autoplay iOS started */
+    if(!video.paused) video.pause();
+    /* 2. Seek to target (set by scrub()) */
+    if(Math.abs(video.currentTime - targetTime) > 0.015){
+      video.currentTime = targetTime;
+    }
+  }
+
+  /* ── Scroll lock ── */
   function lockScroll(){
     document.body.style.overflow = 'hidden';
     document.body.style.position = 'fixed';
@@ -807,72 +818,68 @@ footer{
     window.scrollTo(0, hero.offsetTop + hero.offsetHeight);
   }
 
-  /* ── Scrub: delta can be + (forward) or - (reverse) ── */
-  function scrub(delta, endTime){
+  /* ── Scrub: + = forward, − = reverse ── */
+  function scrub(delta){
     if(done) return;
     vs = Math.max(0, Math.min(TOTAL, vs + delta));
-    var p = vs / TOTAL;
-    video.currentTime = p * endTime;
+    var p  = vs / TOTAL;
+    targetTime = p * endTime;            /* RAF will apply this */
     if(prog) prog.style.width = (p * 100) + '%';
-    /* Complete only when scrolled ALL the way forward */
-    if(vs >= TOTAL) complete(endTime);
+    if(vs >= TOTAL) complete();
   }
 
-  /* ── Complete: freeze, brief pause, then unlock ── */
-  function complete(endTime){
+  /* ── Complete: cancel RAF, freeze, unlock ── */
+  function complete(){
     if(done) return;
     done = true;
-    window.removeEventListener('wheel',       onWheel,      false);
-    document.removeEventListener('touchstart',onTouchStart, false);
-    document.removeEventListener('touchmove', onTouchMove,  false);
-    clearInterval(pauseGuard);
+    cancelAnimationFrame(rafId);
+    window.removeEventListener('wheel',        onWheel,      false);
+    document.removeEventListener('touchstart', onTouchStart, false);
+    document.removeEventListener('touchmove',  onTouchMove,  false);
     video.currentTime = endTime;
     video.pause();
     if(cue) cue.style.opacity = '0';
-    if(prog){ prog.style.width = '100%'; setTimeout(function(){ prog.style.opacity='0'; }, 400); }
-    /* 400ms freeze so user sees the final frame, then unlock */
-    setTimeout(unlockScroll, 400);
+    if(prog){
+      prog.style.width = '100%';
+      setTimeout(function(){ prog.style.opacity = '0'; }, 400);
+    }
+    /* Short freeze so user sees final frame, then unlock */
+    setTimeout(unlockScroll, 600);
   }
 
-  /* ── Pause guard: prevents iOS autoplay without using play/pause
-     event listeners (those caused the 4× retry loop) ── */
-  var pauseGuard = setInterval(function(){
-    if(done){ clearInterval(pauseGuard); return; }
-    if(!video.paused) video.pause();
-  }, 50);
-
-  /* ── Init after metadata ── */
+  /* ── Init on metadata ── */
   video.addEventListener('loadedmetadata', function onMeta(){
     video.removeEventListener('loadedmetadata', onMeta);
     var dur = video.duration;
     if(!dur || isNaN(dur) || dur === Infinity) return;
-    /* Stay 50ms before end — avoids browser "ended" state reset on Android */
-    var endTime = Math.max(0, dur - 0.05);
-    video.pause();
+    endTime    = Math.max(0, dur - 0.05);
+    targetTime = 0;
     video.currentTime = 0;
+    video.pause();
     lockScroll();
+    rafId = requestAnimationFrame(rafLoop);   /* start 60fps guard */
 
-    /* Desktop wheel — both directions */
+    /* Desktop: wheel */
     function onWheel(e){
       if(done) return;
       e.preventDefault();
-      scrub(e.deltaY, endTime); /* deltaY: + = scroll down, - = scroll up */
+      scrub(e.deltaY);
     }
     window.addEventListener('wheel', onWheel, {passive:false});
 
-    /* Mobile touch — both directions */
+    /* Mobile: touch — both directions */
     var ty = 0;
     function onTouchStart(e){ ty = e.touches[0].clientY; }
     function onTouchMove(e){
       if(done) return;
       e.preventDefault();
-      var dy = ty - e.touches[0].clientY; /* + = swipe up (forward), - = swipe down (reverse) */
+      var dy = ty - e.touches[0].clientY;  /* + up=forward  − down=reverse */
       ty = e.touches[0].clientY;
-      scrub(dy * 1.5, endTime);
+      scrub(dy * 1.5);
     }
     document.addEventListener('touchstart', onTouchStart, {passive:true});
     document.addEventListener('touchmove',  onTouchMove,  {passive:false});
-  });
+  }, {once:true});
 
 })();
 
