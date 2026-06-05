@@ -758,17 +758,9 @@ footer{
 
 <script>
 /* ════════════════════════════════════════════════════════════
-   HERO — pure JS scroll-scrub. Zero GSAP. Zero looping.
-
-   Architecture:
-   - Intercept wheel + touchmove with preventDefault (page can't
-     scroll at all while animation is active)
-   - Accumulate gesture delta into a 0→1 progress value
-   - Set video.currentTime = progress * endTime
-   - On completion: remove ALL listeners, lock video, then jump
-     the page scroll past the hero so content flows naturally
-   - Done flag checked first in every handler — impossible to
-     replay once set
+   HERO — scroll-scrub video, plays ONCE, stops on last frame.
+   Fixed for iOS Safari: touchmove listener on the ELEMENT not
+   window, video kept paused via timeupdate guard.
    ════════════════════════════════════════════════════════════ */
 (function(){
   var hero  = document.getElementById('hero');
@@ -779,7 +771,7 @@ footer{
 
   var isMobile = window.innerWidth <= 768;
 
-  /* Strip any loop / autoplay that could cause replays */
+  /* Hard-remove loop/autoplay */
   video.removeAttribute('loop');
   video.removeAttribute('autoplay');
   video.setAttribute('playsinline','');
@@ -788,29 +780,30 @@ footer{
   video.setAttribute('preload','auto');
   video.muted = true;
 
-  /* Attach listener BEFORE setting src (prevents cached-load race) */
+  /* Guard: keep video paused until user starts swiping.
+     iOS Safari ignores video.pause() on load for muted inline
+     videos — this timeupdate listener enforces it.            */
+  var guardActive = true;
+  video.addEventListener('timeupdate', function(){
+    if(guardActive) video.pause();
+  });
+
   video.addEventListener('loadedmetadata', function onMeta(){
     video.removeEventListener('loadedmetadata', onMeta);
-
     var dur = video.duration;
     if(!dur || isNaN(dur) || dur === Infinity) return;
 
-    /* Stay 50ms before end — avoids browser "ended" state which
-       causes Chrome Android to reset currentTime to 0 on next seek */
     var endTime = Math.max(0, dur - 0.05);
-
-    /* Total gesture pixels needed to play the full video.
-       Smaller = quicker animation. Larger = slower / more scroll. */
-    var TOTAL = isMobile ? 2500 : 5000;
-    var accum = 0;
-    var done  = false;
+    var TOTAL   = isMobile ? 2500 : 5000;
+    var accum   = 0;
+    var done    = false;
 
     video.pause();
     video.currentTime = 0;
 
-    /* ── Update video from accumulated progress ── */
     function advance(delta){
       if(done) return;
+      guardActive = false; /* allow seeking now */
       accum = Math.min(TOTAL, accum + delta);
       var p = accum / TOTAL;
       video.currentTime = p * endTime;
@@ -818,61 +811,67 @@ footer{
       if(accum >= TOTAL) complete();
     }
 
-    /* ── Called exactly once when animation finishes ── */
     function complete(){
       if(done) return;
       done = true;
+      guardActive = false;
 
-      /* Remove every listener — nothing can touch video after this */
-      window.removeEventListener('wheel',      onWheel,      false);
-      window.removeEventListener('touchstart', onTouchStart, false);
-      window.removeEventListener('touchmove',  onTouchMove,  false);
+      /* Remove listeners from BOTH window and hero element */
+      window.removeEventListener('wheel',       onWheel,      false);
+      hero.removeEventListener('touchstart',    onTouchStart, false);
+      hero.removeEventListener('touchmove',     onTouchMove,  false);
+      document.removeEventListener('touchstart',onTouchStart, false);
+      document.removeEventListener('touchmove', onTouchMove,  false);
 
-      /* Lock on end frame */
       video.currentTime = endTime;
       video.pause();
 
       if(cue) cue.style.opacity = '0';
       if(prog){
         prog.style.width = '100%';
-        setTimeout(function(){ prog.style.opacity = '0'; }, 400);
+        setTimeout(function(){ prog.style.opacity='0'; }, 400);
       }
 
-      /* Scroll page to just below hero so content flows in */
-      var heroBottom = hero.offsetTop + hero.offsetHeight;
-      window.scrollTo(0, heroBottom);
+      window.scrollTo(0, hero.offsetTop + hero.offsetHeight);
     }
 
-    /* ── Desktop: mouse wheel / trackpad ── */
+    /* ── Desktop: wheel ── */
     function onWheel(e){
       if(done) return;
-      e.preventDefault();             /* block page scroll */
+      e.preventDefault();
       if(e.deltaY > 0) advance(e.deltaY);
     }
+    window.addEventListener('wheel', onWheel, {passive:false});
 
-    /* ── Mobile: touch swipe ── */
+    /* ── Mobile: attach to BOTH document AND hero element.
+       iOS Safari requires the listener on the element that
+       will receive the touch — window-level passive:false is
+       often ignored. We cover both to guarantee capture.    */
     var ty = 0;
     function onTouchStart(e){ ty = e.touches[0].clientY; }
     function onTouchMove(e){
       if(done) return;
-      e.preventDefault();             /* block page scroll */
-      var dy = ty - e.touches[0].clientY;  /* + = swipe up */
+      /* preventDefault stops iOS native scroll */
+      e.preventDefault();
+      var dy = ty - e.touches[0].clientY;
       ty = e.touches[0].clientY;
-      if(dy > 0) advance(dy * 1.2);  /* ×1.2 = smooth on mobile with longer distance */
+      if(dy > 0) advance(dy * 1.5);
     }
 
-    /* passive:false required so we can call preventDefault */
-    window.addEventListener('wheel',      onWheel,      {passive:false});
-    window.addEventListener('touchstart', onTouchStart, {passive:true});
-    window.addEventListener('touchmove',  onTouchMove,  {passive:false});
+    /* Register on document (catches all touches) */
+    document.addEventListener('touchstart', onTouchStart, {passive:true});
+    document.addEventListener('touchmove',  onTouchMove,  {passive:false});
 
-    /* Ensure page is scrolled to hero top before locking */
+    /* Also register directly on hero for iOS belt-and-suspenders */
+    hero.addEventListener('touchstart', onTouchStart, {passive:true});
+    hero.addEventListener('touchmove',  onTouchMove,  {passive:false});
+
     window.scrollTo(0, hero.offsetTop);
   });
 
   video.src = isMobile ? 'images/vape-mobile.mp4' : 'images/vape-desktop.mp4';
   video.load();
-
+  video.pause();
 })();
 
 /* ── NAV ── */
