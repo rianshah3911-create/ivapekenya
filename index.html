@@ -810,8 +810,9 @@ footer{
     /* Scroll distance + scrub tuned per device
        Mobile: shorter distance + tighter scrub = responsive to touch
        Desktop: longer distance + 1.5s scrub = cinematic glide        */
-    var scrollDist = isMobile ? 2000 : 5000;
+    var scrollDist = isMobile ? 4000 : 5000;
     var scrubVal   = isMobile ? 0.8  : 1.5;
+    var finished   = false;   /* once true, video is permanently locked on last frame */
 
     /* ── 3. GSAP ScrollTrigger + scrub ──────────────────────────
        scrub: N  → GSAP tweens its internal progress toward scroll
@@ -826,16 +827,6 @@ footer{
       scrub              : scrubVal,
       invalidateOnRefresh: true,
 
-      onUpdate: function(self){
-        /* One seek per GSAP frame. GSAP's smoothed progress
-           means we never jump more than ~1 frame per tick.    */
-        video.currentTime = self.progress * duration;
-
-        /* Update progress bar — direct width, no CSS transition */
-        if(progressEl)
-          progressEl.style.width = (self.progress * 100) + '%';
-      },
-
       onEnter: function(){
         /* Fade scroll cue — only runs once */
         if(scrollCue)
@@ -843,16 +834,24 @@ footer{
       },
 
       onLeave: function(self){
-        /* Lock to last frame permanently — kill trigger so scrolling
-           back up never reverses the video */
+        /* Hard-lock to last frame — kill trigger permanently */
+        finished = true;
         video.currentTime = duration;
+        video.pause();
         if(progressEl)
           gsap.to(progressEl, { opacity:0, duration:0.6, delay:0.2, ease:'power2.out' });
-        /* Kill — ScrollTrigger no longer listens to scroll after this */
         self.kill();
       },
 
+      onUpdate: function(self){
+        if(finished) return;           /* ignore all updates after end */
+        video.currentTime = self.progress * duration;
+        if(progressEl)
+          progressEl.style.width = (self.progress * 100) + '%';
+      },
+
       onEnterBack: function(){
+        if(finished) return;           /* never rewind once done */
         if(progressEl) gsap.set(progressEl, { opacity:1 });
       }
     });
