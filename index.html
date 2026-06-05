@@ -758,31 +758,28 @@ footer{
 
 <script>
 /* ════════════════════════════════════════════════════════════
-   HERO — plays once, locks permanently on last frame.
+   HERO — pure JS scroll-scrub. Zero GSAP. Zero looping.
 
-   ROOT CAUSE OF LOOPING FIXED:
-   Setting video.currentTime = duration puts the video into
-   the browser "ended" state. Any subsequent currentTime
-   assignment on an ended video causes Chrome Android to reset
-   to 0 and replay. iOS Safari silently ignores it.
-   Fix: use endTime = duration - 0.05 throughout, so the video
-   is always 50ms from the end — never "ended", never loops.
-   A 500ms lock interval also overrides any residual callbacks.
+   Architecture:
+   - Intercept wheel + touchmove with preventDefault (page can't
+     scroll at all while animation is active)
+   - Accumulate gesture delta into a 0→1 progress value
+   - Set video.currentTime = progress * endTime
+   - On completion: remove ALL listeners, lock video, then jump
+     the page scroll past the hero so content flows naturally
+   - Done flag checked first in every handler — impossible to
+     replay once set
    ════════════════════════════════════════════════════════════ */
 (function(){
-  gsap.registerPlugin(ScrollTrigger);
-  gsap.ticker.lagSmoothing(0);
-  ScrollTrigger.normalizeScroll(true);
-
-  var hero       = document.getElementById('hero');
-  var video      = document.getElementById('heroVideo');
-  var progressEl = document.getElementById('heroProgress');
-  var scrollCue  = document.getElementById('scrollCue');
-  if(!video || !hero) return;
+  var hero  = document.getElementById('hero');
+  var video = document.getElementById('heroVideo');
+  var prog  = document.getElementById('heroProgress');
+  var cue   = document.getElementById('scrollCue');
+  if(!hero || !video) return;
 
   var isMobile = window.innerWidth <= 768;
 
-  /* Ensure no loop / autoplay attrs exist */
+  /* Strip any loop / autoplay that could cause replays */
   video.removeAttribute('loop');
   video.removeAttribute('autoplay');
   video.setAttribute('playsinline','');
@@ -791,90 +788,86 @@ footer{
   video.setAttribute('preload','auto');
   video.muted = true;
 
-  /* Listener BEFORE src assignment — prevents race on cached video */
+  /* Attach listener BEFORE setting src (prevents cached-load race) */
   video.addEventListener('loadedmetadata', function onMeta(){
     video.removeEventListener('loadedmetadata', onMeta);
 
     var dur = video.duration;
     if(!dur || isNaN(dur) || dur === Infinity) return;
 
-    /* ── CRITICAL: never seek to exact duration ──────────────────
-       endTime = dur - 0.05 keeps video 50ms before the end.
-       This prevents the "ended" state that causes Chrome Android
-       to reset currentTime to 0 on the next seek attempt.        */
-    var endTime    = Math.max(0, dur - 0.05);
-    var scrollDist = isMobile ? 1200 : 2500;
-    var finished   = false;
-    var lockTimer  = null;
+    /* Stay 50ms before end — avoids browser "ended" state which
+       causes Chrome Android to reset currentTime to 0 on next seek */
+    var endTime = Math.max(0, dur - 0.05);
+
+    /* Total gesture pixels needed to play the full video.
+       Smaller = quicker animation. Larger = slower / more scroll. */
+    var TOTAL = isMobile ? 350 : 800;
+    var accum = 0;
+    var done  = false;
 
     video.pause();
     video.currentTime = 0;
 
-    /* Called once when animation completes.
-       Runs a 500ms interval to forcibly hold the end frame,
-       overriding any residual GSAP or scroll callbacks.     */
-    function lockEndFrame(){
-      if(finished) return;
-      finished = true;
-      video.pause();
-      video.currentTime = endTime;
-      if(progressEl){
-        progressEl.style.width = '100%';
-        gsap.to(progressEl,{opacity:0,duration:0.4,delay:0.3});
-      }
-      if(scrollCue) scrollCue.style.opacity = '0';
-      /* Hold end frame for 500ms to win against any late callbacks */
-      lockTimer = setInterval(function(){
-        if(video.currentTime !== endTime){
-          video.currentTime = endTime;
-        }
-        video.pause();
-      }, 16);
-      setTimeout(function(){ clearInterval(lockTimer); }, 500);
+    /* ── Update video from accumulated progress ── */
+    function advance(delta){
+      if(done) return;
+      accum = Math.min(TOTAL, accum + delta);
+      var p = accum / TOTAL;
+      video.currentTime = p * endTime;
+      if(prog) prog.style.width = (p * 100) + '%';
+      if(accum >= TOTAL) complete();
     }
 
-    ScrollTrigger.create({
-      trigger            : '#hero',
-      start              : 'top top',
-      end                : '+=' + scrollDist,
-      pin                : true,
-      pinSpacing         : true,
-      scrub              : true,
-      invalidateOnRefresh: true,
-      fastScrollEnd      : true,
+    /* ── Called exactly once when animation finishes ── */
+    function complete(){
+      if(done) return;
+      done = true;
 
-      onEnter: function(){
-        if(scrollCue) gsap.to(scrollCue,{opacity:0,duration:0.4});
-      },
+      /* Remove every listener — nothing can touch video after this */
+      window.removeEventListener('wheel',      onWheel,      false);
+      window.removeEventListener('touchstart', onTouchStart, false);
+      window.removeEventListener('touchmove',  onTouchMove,  false);
 
-      onUpdate: function(self){
-        /* Once finished, enforce end frame every tick */
-        if(finished){
-          video.currentTime = endTime;
-          video.pause();
-          return;
-        }
-        /* Map scroll progress → video time (capped at endTime) */
-        video.currentTime = Math.min(self.progress * dur, endTime);
-        if(progressEl) progressEl.style.width = (self.progress * 100) + '%';
-      },
+      /* Lock on end frame */
+      video.currentTime = endTime;
+      video.pause();
 
-      onLeave: function(){
-        lockEndFrame();
-      },
-
-      onEnterBack: function(){
-        /* Never rewind — stay on end frame */
-        if(finished){
-          video.currentTime = endTime;
-          video.pause();
-          return;
-        }
-        if(progressEl) gsap.set(progressEl,{opacity:1});
+      if(cue) cue.style.opacity = '0';
+      if(prog){
+        prog.style.width = '100%';
+        setTimeout(function(){ prog.style.opacity = '0'; }, 400);
       }
-    });
 
-    ScrollTrigger.refresh();
+      /* Scroll page to just below hero so content flows in */
+      var heroBottom = hero.offsetTop + hero.offsetHeight;
+      window.scrollTo(0, heroBottom);
+    }
+
+    /* ── Desktop: mouse wheel / trackpad ── */
+    function onWheel(e){
+      if(done) return;
+      e.preventDefault();             /* block page scroll */
+      if(e.deltaY > 0) advance(e.deltaY);
+    }
+
+    /* ── Mobile: touch swipe ── */
+    var ty = 0;
+    function onTouchStart(e){ ty = e.touches[0].clientY; }
+    function onTouchMove(e){
+      if(done) return;
+      e.preventDefault();             /* block page scroll */
+      var dy = ty - e.touches[0].clientY;  /* + = swipe up */
+      ty = e.touches[0].clientY;
+      if(dy > 0) advance(dy * 3);    /* ×3 = sensitive on mobile */
+    }
+
+    /* passive:false required so we can call preventDefault */
+    window.addEventListener('wheel',      onWheel,      {passive:false});
+    window.addEventListener('touchstart', onTouchStart, {passive:true});
+    window.addEventListener('touchmove',  onTouchMove,  {passive:false});
+
+    /* Ensure page is scrolled to hero top before locking */
+    window.scrollTo(0, hero.offsetTop);
   });
 
   video.src = isMobile ? 'images/vape-mobile.mp4' : 'images/vape-desktop.mp4';
