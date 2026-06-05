@@ -158,8 +158,8 @@ nav{
 
 /* ── ABOUT ── */
 .about-section{
-  padding:110px 72px;
-  display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:center;
+  padding:52px 72px;
+  display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center;
 }
 .about-left h2{
   font-family:'Bebas Neue',cursive;
@@ -536,8 +536,8 @@ footer{
   /* About */
   .about-section{
     grid-template-columns:1fr;
-    gap:32px;
-    padding:48px 20px;
+    gap:24px;
+    padding:32px 20px;
   }
   .about-left h2{font-size:2.8rem;}
   .vape1-img{width:240px;}
@@ -799,56 +799,40 @@ footer{
     video.pause();
     video.currentTime = 0;
 
-    /* ── Per-device tuning ──
-       Mobile: 2500px = shorter, snappier feel on touch
-       Desktop: 5000px = cinematic, luxurious glide          */
-    var scrollDist = isMobile ? 2500 : 5000;
-    var scrubVal   = isMobile ? 0.4  : 1.5;
-
-    /* finished = true once animation plays through once.
-       After that EVERY callback clamps video to last frame. */
-    var finished = false;
+    /* Short scroll distance — done quickly, no endless scrolling
+       scrub:true = instant 1:1 mapping, NO internal GSAP tween.
+       No tween = nothing to reverse = no looping possible.       */
+    var scrollDist = isMobile ? 1200 : 2500;
+    var finished   = false;
 
     ScrollTrigger.create({
       trigger            : '#hero',
       start              : 'top top',
       end                : '+=' + scrollDist,
       pin                : true,
-      scrub              : scrubVal,
+      scrub              : true,          /* instant — no tween, no reversal */
       invalidateOnRefresh: true,
-      /* fastScrollEnd: when user flicks past end quickly,
-         completes the animation cleanly instead of skipping */
       fastScrollEnd      : true,
 
       onEnter: function(){
-        if(scrollCue) gsap.to(scrollCue,{opacity:0,duration:0.5,ease:'power2.out'});
+        if(scrollCue) gsap.to(scrollCue,{opacity:0,duration:0.4});
       },
 
       onUpdate: function(self){
-        /* Always clamp to end once finished.
-           Prevents any internal GSAP tween from rewinding. */
-        if(finished){
-          video.currentTime = dur;
-          return;
-        }
+        if(finished){ video.currentTime = dur; return; }
         video.currentTime = self.progress * dur;
         if(progressEl) progressEl.style.width = (self.progress * 100) + '%';
       },
 
       onLeave: function(){
-        /* Mark done first so onUpdate immediately clamps */
         finished = true;
         video.currentTime = dur;
         video.pause();
-        if(progressEl) gsap.to(progressEl,{opacity:0,duration:0.5,delay:0.2});
+        if(progressEl) gsap.to(progressEl,{opacity:0,duration:0.4});
       },
 
       onEnterBack: function(){
-        /* User scrolled back into the section — keep end frame */
-        if(finished){
-          video.currentTime = dur;
-          return;
-        }
+        if(finished){ video.currentTime = dur; return; }
         if(progressEl) gsap.set(progressEl,{opacity:1});
       }
     });
