@@ -780,13 +780,13 @@ footer{
   video.setAttribute('preload','auto');
   video.muted = true;
 
-  /* Guard: keep video paused until user starts swiping.
-     iOS Safari ignores video.pause() on load for muted inline
-     videos — this timeupdate listener enforces it.            */
-  var guardActive = true;
-  video.addEventListener('timeupdate', function(){
-    if(guardActive) video.pause();
-  });
+  /* Block iOS autoplay by intercepting the play event directly.
+     Much more reliable than timeupdate — fires the moment the
+     browser tries to start playback and cancels it immediately. */
+  var allowPlay = false;
+  function blockPlay(){ if(!allowPlay){ video.pause(); } }
+  video.addEventListener('play',    blockPlay);
+  video.addEventListener('playing', blockPlay);
 
   video.addEventListener('loadedmetadata', function onMeta(){
     video.removeEventListener('loadedmetadata', onMeta);
@@ -803,7 +803,7 @@ footer{
 
     function advance(delta){
       if(done) return;
-      guardActive = false; /* allow seeking now */
+      allowPlay = false; /* keep blocking autoplay during scrub */
       accum = Math.min(TOTAL, accum + delta);
       var p = accum / TOTAL;
       video.currentTime = p * endTime;
@@ -814,12 +814,9 @@ footer{
     function complete(){
       if(done) return;
       done = true;
-      guardActive = false;
 
-      /* Remove listeners from BOTH window and hero element */
+      /* Remove ONLY document-level listeners — no double-registration */
       window.removeEventListener('wheel',       onWheel,      false);
-      hero.removeEventListener('touchstart',    onTouchStart, false);
-      hero.removeEventListener('touchmove',     onTouchMove,  false);
       document.removeEventListener('touchstart',onTouchStart, false);
       document.removeEventListener('touchmove', onTouchMove,  false);
 
@@ -843,35 +840,27 @@ footer{
     }
     window.addEventListener('wheel', onWheel, {passive:false});
 
-    /* ── Mobile: attach to BOTH document AND hero element.
-       iOS Safari requires the listener on the element that
-       will receive the touch — window-level passive:false is
-       often ignored. We cover both to guarantee capture.    */
+    /* ── Mobile: ONLY on document — registering on both hero AND
+       document caused events to fire TWICE per swipe (bubbling),
+       doubling the delta and making the animation run 2× too fast,
+       completing early and jumping the page, appearing as a "loop". */
     var ty = 0;
     function onTouchStart(e){ ty = e.touches[0].clientY; }
     function onTouchMove(e){
       if(done) return;
-      /* preventDefault stops iOS native scroll */
       e.preventDefault();
       var dy = ty - e.touches[0].clientY;
       ty = e.touches[0].clientY;
       if(dy > 0) advance(dy * 1.5);
     }
-
-    /* Register on document (catches all touches) */
     document.addEventListener('touchstart', onTouchStart, {passive:true});
     document.addEventListener('touchmove',  onTouchMove,  {passive:false});
-
-    /* Also register directly on hero for iOS belt-and-suspenders */
-    hero.addEventListener('touchstart', onTouchStart, {passive:true});
-    hero.addEventListener('touchmove',  onTouchMove,  {passive:false});
 
     window.scrollTo(0, hero.offsetTop);
   });
 
   video.src = isMobile ? 'images/vape-mobile.mp4' : 'images/vape-desktop.mp4';
   video.load();
-  video.pause();
 })();
 
 /* ── NAV ── */
