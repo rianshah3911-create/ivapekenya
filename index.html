@@ -801,7 +801,7 @@ footer{
 
     /* Total gesture pixels needed to play the full video.
        Smaller = quicker animation. Larger = slower / more scroll. */
-    var TOTAL = isMobile ? 350 : 800;
+    var TOTAL = isMobile ? 2500 : 5000;
     var accum = 0;
     var done  = false;
 
@@ -858,7 +858,7 @@ footer{
       e.preventDefault();             /* block page scroll */
       var dy = ty - e.touches[0].clientY;  /* + = swipe up */
       ty = e.touches[0].clientY;
-      if(dy > 0) advance(dy * 3);    /* ×3 = sensitive on mobile */
+      if(dy > 0) advance(dy * 1.2);  /* ×1.2 = smooth on mobile with longer distance */
     }
 
     /* passive:false required so we can call preventDefault */
