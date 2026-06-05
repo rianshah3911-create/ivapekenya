@@ -758,18 +758,20 @@ footer{
 
 <script>
 /* ════════════════════════════════════════════════════════════
-   HERO — one-time scroll-scrub, plays once, locks on last frame
-   Single GSAP approach for all devices.
-   normalizeScroll fixes iOS Safari rubber-band + address bar.
+   HERO — plays once, locks permanently on last frame.
+
+   ROOT CAUSE OF LOOPING FIXED:
+   Setting video.currentTime = duration puts the video into
+   the browser "ended" state. Any subsequent currentTime
+   assignment on an ended video causes Chrome Android to reset
+   to 0 and replay. iOS Safari silently ignores it.
+   Fix: use endTime = duration - 0.05 throughout, so the video
+   is always 50ms from the end — never "ended", never loops.
+   A 500ms lock interval also overrides any residual callbacks.
    ════════════════════════════════════════════════════════════ */
 (function(){
   gsap.registerPlugin(ScrollTrigger);
-
-  /* Stop GSAP skipping frames to catch up after lag spikes */
   gsap.ticker.lagSmoothing(0);
-
-  /* KEY: normalizes iOS Safari's scroll quirks (rubber-band,
-     address bar resize, momentum bounce) so pin works correctly */
   ScrollTrigger.normalizeScroll(true);
 
   var hero       = document.getElementById('hero');
@@ -780,37 +782,64 @@ footer{
 
   var isMobile = window.innerWidth <= 768;
 
-  /* ── Set video attrs before src so browser respects them ── */
-  video.setAttribute('playsinline', '');
-  video.setAttribute('webkit-playsinline', '');
-  video.setAttribute('muted', '');
-  video.setAttribute('preload', 'auto');
+  /* Ensure no loop / autoplay attrs exist */
+  video.removeAttribute('loop');
+  video.removeAttribute('autoplay');
+  video.setAttribute('playsinline','');
+  video.setAttribute('webkit-playsinline','');
+  video.setAttribute('muted','');
+  video.setAttribute('preload','auto');
   video.muted = true;
 
-  /* ── Attach metadata listener FIRST, then set src ──
-     Avoids race where browser fires loadedmetadata before
-     our listener is attached (happens when video is cached) */
+  /* Listener BEFORE src assignment — prevents race on cached video */
   video.addEventListener('loadedmetadata', function onMeta(){
     video.removeEventListener('loadedmetadata', onMeta);
 
     var dur = video.duration;
     if(!dur || isNaN(dur) || dur === Infinity) return;
 
+    /* ── CRITICAL: never seek to exact duration ──────────────────
+       endTime = dur - 0.05 keeps video 50ms before the end.
+       This prevents the "ended" state that causes Chrome Android
+       to reset currentTime to 0 on the next seek attempt.        */
+    var endTime    = Math.max(0, dur - 0.05);
+    var scrollDist = isMobile ? 1200 : 2500;
+    var finished   = false;
+    var lockTimer  = null;
+
     video.pause();
     video.currentTime = 0;
 
-    /* Short scroll distance — done quickly, no endless scrolling
-       scrub:true = instant 1:1 mapping, NO internal GSAP tween.
-       No tween = nothing to reverse = no looping possible.       */
-    var scrollDist = isMobile ? 1200 : 2500;
-    var finished   = false;
+    /* Called once when animation completes.
+       Runs a 500ms interval to forcibly hold the end frame,
+       overriding any residual GSAP or scroll callbacks.     */
+    function lockEndFrame(){
+      if(finished) return;
+      finished = true;
+      video.pause();
+      video.currentTime = endTime;
+      if(progressEl){
+        progressEl.style.width = '100%';
+        gsap.to(progressEl,{opacity:0,duration:0.4,delay:0.3});
+      }
+      if(scrollCue) scrollCue.style.opacity = '0';
+      /* Hold end frame for 500ms to win against any late callbacks */
+      lockTimer = setInterval(function(){
+        if(video.currentTime !== endTime){
+          video.currentTime = endTime;
+        }
+        video.pause();
+      }, 16);
+      setTimeout(function(){ clearInterval(lockTimer); }, 500);
+    }
 
     ScrollTrigger.create({
       trigger            : '#hero',
       start              : 'top top',
       end                : '+=' + scrollDist,
       pin                : true,
-      scrub              : true,          /* instant — no tween, no reversal */
+      pinSpacing         : true,
+      scrub              : true,
       invalidateOnRefresh: true,
       fastScrollEnd      : true,
 
@@ -819,20 +848,28 @@ footer{
       },
 
       onUpdate: function(self){
-        if(finished){ video.currentTime = dur; return; }
-        video.currentTime = self.progress * dur;
+        /* Once finished, enforce end frame every tick */
+        if(finished){
+          video.currentTime = endTime;
+          video.pause();
+          return;
+        }
+        /* Map scroll progress → video time (capped at endTime) */
+        video.currentTime = Math.min(self.progress * dur, endTime);
         if(progressEl) progressEl.style.width = (self.progress * 100) + '%';
       },
 
       onLeave: function(){
-        finished = true;
-        video.currentTime = dur;
-        video.pause();
-        if(progressEl) gsap.to(progressEl,{opacity:0,duration:0.4});
+        lockEndFrame();
       },
 
       onEnterBack: function(){
-        if(finished){ video.currentTime = dur; return; }
+        /* Never rewind — stay on end frame */
+        if(finished){
+          video.currentTime = endTime;
+          video.pause();
+          return;
+        }
         if(progressEl) gsap.set(progressEl,{opacity:1});
       }
     });
@@ -840,7 +877,6 @@ footer{
     ScrollTrigger.refresh();
   });
 
-  /* Set src after listener is attached */
   video.src = isMobile ? 'images/vape-mobile.mp4' : 'images/vape-desktop.mp4';
   video.load();
 
