@@ -758,15 +758,8 @@ footer{
 
 <script>
 /* ════════════════════════════════════════════════════════════
-   HERO ANIMATION — plays ONCE, freezes on last frame.
-
-   MOBILE  → video.play() once + body scroll lock
-             (iOS Safari cannot reliably scrub currentTime.
-              blockPlay loops caused 4× repeats. Fixed by
-              letting the video play naturally while the page
-              is locked with body position:fixed.)
-
-   DESKTOP → wheel delta scrubs currentTime directly
+   HERO — Stop-Scroll Animation. Plays once. Freezes.
+   Page is locked while animation plays on both mobile + desktop.
    ════════════════════════════════════════════════════════════ */
 (function(){
   var hero  = document.getElementById('hero');
@@ -777,8 +770,10 @@ footer{
 
   var isMobile = window.innerWidth <= 768;
   var done     = false;
+  var TOTAL    = isMobile ? 2500 : 5000;
+  var accum    = 0;
 
-  /* Clean video element — no loop, no autoplay */
+  /* ── Video attrs ── */
   video.removeAttribute('loop');
   video.removeAttribute('autoplay');
   video.setAttribute('playsinline','');
@@ -786,115 +781,94 @@ footer{
   video.setAttribute('muted','');
   video.setAttribute('preload','auto');
   video.muted = true;
-
   video.src = isMobile ? 'images/vape-mobile.mp4' : 'images/vape-desktop.mp4';
   video.load();
 
-  /* ══════════════════════════════════════════════
-     MOBILE — play once, lock scroll, freeze at end
-     ══════════════════════════════════════════════ */
-  if(isMobile){
-
-    /* Lock body scroll using position:fixed trick (works on iOS) */
-    function lockScroll(){
-      document.body.style.overflow = 'hidden';
-      document.body.style.position = 'fixed';
-      document.body.style.top      = '0';
-      document.body.style.width    = '100%';
-    }
-
-    function unlockScroll(){
-      document.body.style.overflow  = '';
-      document.body.style.position  = '';
-      document.body.style.top       = '';
-      document.body.style.width     = '';
-      /* Jump scroll to just after hero so content flows in */
-      window.scrollTo(0, hero.offsetTop + hero.offsetHeight);
-    }
-
-    /* Update progress bar during natural playback */
-    video.addEventListener('timeupdate', function(){
-      if(done || !video.duration) return;
-      var p = video.currentTime / video.duration;
-      if(prog) prog.style.width = (p * 100) + '%';
-    });
-
-    /* Freeze on last frame when video ends — ONE TIME ONLY */
-    video.addEventListener('ended', function(){
-      if(done) return;
-      done = true;
-      video.pause();
-      /* Seek 1 frame before end so "ended" state doesn't auto-reset */
-      video.currentTime = Math.max(0, video.duration - 0.05);
-      if(cue)  cue.style.opacity  = '0';
-      if(prog){
-        prog.style.width   = '100%';
-        setTimeout(function(){ prog.style.opacity = '0'; }, 500);
-      }
-      unlockScroll();
-    });
-
-    /* IntersectionObserver: start animation when hero is fully visible */
-    var io = new IntersectionObserver(function(entries){
-      if(entries[0].isIntersecting && !done){
-        io.disconnect();
-        lockScroll();
-        video.currentTime = 0;
-        video.play().catch(function(){ unlockScroll(); });
-        if(cue) cue.style.opacity = '1';
-      }
-    }, { threshold: 0.6 });
-    io.observe(hero);
-
-  /* ══════════════════════════════════════════════
-     DESKTOP — wheel scrubs currentTime
-     ══════════════════════════════════════════════ */
-  } else {
-
-    video.addEventListener('loadedmetadata', function onMeta(){
-      video.removeEventListener('loadedmetadata', onMeta);
-      var dur = video.duration;
-      if(!dur || isNaN(dur)) return;
-
-      var endTime = Math.max(0, dur - 0.05);
-      var TOTAL   = 5000;
-      var accum   = 0;
-
-      video.pause();
-      video.currentTime = 0;
-
-      function advance(delta){
-        if(done) return;
-        accum = Math.min(TOTAL, accum + delta);
-        var p = accum / TOTAL;
-        video.currentTime = p * endTime;
-        if(prog) prog.style.width = (p * 100) + '%';
-        if(accum >= TOTAL) complete();
-      }
-
-      function complete(){
-        if(done) return;
-        done = true;
-        window.removeEventListener('wheel', onWheel, false);
-        video.currentTime = endTime;
-        video.pause();
-        if(cue)  cue.style.opacity  = '0';
-        if(prog){
-          prog.style.width = '100%';
-          setTimeout(function(){ prog.style.opacity = '0'; }, 400);
-        }
-        window.scrollTo(0, hero.offsetTop + hero.offsetHeight);
-      }
-
-      function onWheel(e){
-        if(done) return;
-        e.preventDefault();
-        if(e.deltaY > 0) advance(e.deltaY);
-      }
-      window.addEventListener('wheel', onWheel, {passive:false});
-      if(cue) cue.style.opacity = '1';
-    });
+  /* ── Lock scroll: body position:fixed — works on all browsers incl iOS ── */
+  function lockScroll(){
+    document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.width    = '100%';
+    document.body.style.top      = '0px';
+    window.scrollTo(0,0);
   }
+  function unlockScroll(){
+    document.body.style.overflow = '';
+    document.body.style.position = '';
+    document.body.style.width    = '';
+    document.body.style.top      = '';
+    /* Scroll to section below hero */
+    window.scrollTo(0, hero.offsetTop + hero.offsetHeight);
+  }
+
+  /* ── Advance: maps gesture delta → video frame ── */
+  function advance(delta, dur){
+    if(done) return;
+    accum = Math.min(TOTAL, accum + delta);
+    var p = accum / TOTAL;
+    /* Set currentTime — stays 50ms before end to avoid "ended" reset bug */
+    video.currentTime = p * Math.max(0, dur - 0.05);
+    if(prog) prog.style.width = (p * 100) + '%';
+    if(accum >= TOTAL) complete(dur);
+  }
+
+  /* ── Complete: freeze on last frame, unlock scroll ── */
+  function complete(dur){
+    if(done) return;
+    done = true;
+    /* Cancel all input listeners */
+    window.removeEventListener('wheel',       onWheel);
+    document.removeEventListener('touchstart',onTouchStart);
+    document.removeEventListener('touchmove', onTouchMove);
+    clearInterval(pauseGuard);
+    /* Freeze */
+    video.currentTime = Math.max(0, dur - 0.05);
+    video.pause();
+    if(cue) cue.style.opacity = '0';
+    if(prog){ prog.style.width='100%'; setTimeout(function(){ prog.style.opacity='0'; },400); }
+    unlockScroll();
+  }
+
+  /* ── Pause guard: interval keeps video paused until user scrubs ──
+     Most reliable cross-browser way to stop iOS autoplay without
+     triggering the play→pause→play loop that caused 4× repeats.  */
+  var pauseGuard = setInterval(function(){
+    if(done){ clearInterval(pauseGuard); return; }
+    if(!video.paused) video.pause();
+  }, 50);
+
+  /* ── Wait for metadata, then lock and arm input listeners ── */
+  video.addEventListener('loadedmetadata', function onMeta(){
+    video.removeEventListener('loadedmetadata', onMeta);
+    var dur = video.duration;
+    if(!dur || isNaN(dur) || dur===Infinity) return;
+    video.pause();
+    video.currentTime = 0;
+
+    /* Lock scroll — hero is first on page so user is at top */
+    lockScroll();
+
+    /* ── Desktop: wheel ── */
+    function onWheel(e){
+      if(done) return;
+      e.preventDefault();
+      if(e.deltaY > 0) advance(e.deltaY, dur);
+    }
+    window.addEventListener('wheel', onWheel, {passive:false});
+
+    /* ── Mobile: touch ── */
+    var ty = 0;
+    function onTouchStart(e){ ty = e.touches[0].clientY; }
+    function onTouchMove(e){
+      if(done) return;
+      e.preventDefault();
+      var dy = ty - e.touches[0].clientY;
+      ty = e.touches[0].clientY;
+      if(dy > 0) advance(dy * 1.5, dur);
+    }
+    document.addEventListener('touchstart', onTouchStart, {passive:true});
+    document.addEventListener('touchmove',  onTouchMove,  {passive:false});
+  });
 
 })();
 
