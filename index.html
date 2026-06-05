@@ -523,15 +523,14 @@ footer{
   .logo{font-size:1.3rem;letter-spacing:3px;}
   .btn-wa-nav{padding:7px 14px;font-size:0.65rem;}
 
-  /* Hero — shorter on mobile so content below is reachable */
+  /* Hero — full viewport on mobile so GSAP pin works correctly */
   .hero{
     margin-top:64px;
-    height:calc(60vh - 64px);
-    min-height:260px;
-    max-height:420px;
+    height:calc(100vh - 64px);
   }
   .hero video{
-    object-position:70% center;
+    object-fit:cover;
+    object-position:center center;
   }
 
   /* About */
@@ -778,16 +777,24 @@ footer{
 
   if(!video) return;
 
-  /* ── 1. Set video source ── */
+  /* ── 1. Detect device & set correct video source ── */
+  var isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+                 || window.innerWidth <= 768;
+
   video.innerHTML = '';
   var s = document.createElement('source');
-  s.src  = 'images/vape-desktop.mp4';
+  s.src  = isMobile ? 'images/vape-mobile.mp4' : 'images/vape-desktop.mp4';
   s.type = 'video/mp4';
   video.appendChild(s);
   video.muted       = true;
   video.playsInline = true;
   video.preload     = 'auto';
+  /* iOS Safari needs setAttribute for playsInline to register */
+  video.setAttribute('playsinline', '');
+  video.setAttribute('muted', '');
   video.load();
+
+  console.log('[Hero] device:', isMobile ? 'mobile → vape-mobile.mp4' : 'desktop → vape-desktop.mp4');
 
   /* ── 2. Init once metadata is ready ── */
   function init(){
@@ -800,26 +807,24 @@ footer{
     video.pause();
     video.currentTime = 0;
 
-    /* Mobile gets shorter scroll distance — feels snappy not endless */
-    var isMobile     = window.innerWidth <= 768;
-    var scrollDist   = isMobile ? 2500 : 5000;
+    /* Scroll distance + scrub tuned per device
+       Mobile: shorter distance + tighter scrub = responsive to touch
+       Desktop: longer distance + 1.5s scrub = cinematic glide        */
+    var scrollDist = isMobile ? 2000 : 5000;
+    var scrubVal   = isMobile ? 0.8  : 1.5;
 
     /* ── 3. GSAP ScrollTrigger + scrub ──────────────────────────
-       scrub: 1.5  → GSAP internally tweens progress toward the
-                      scroll target over 1.5s using its own RAF
-                      ticker (delta-time corrected, 60fps stable).
-                      This IS the lerp — no manual RAF needed.
-
-       onUpdate fires once per GSAP ticker frame (not per scroll
-       event) with the already-smoothed progress value.
-       We set video.currentTime exactly once per frame.          */
+       scrub: N  → GSAP tweens its internal progress toward scroll
+                    target over N seconds (delta-time corrected).
+       onUpdate fires once per GSAP ticker frame with the already-
+       smoothed value — we set video.currentTime exactly once/frame */
     ScrollTrigger.create({
-      trigger          : '#hero',
-      start            : 'top top',
-      end              : '+=' + scrollDist,
-      pin              : true,
-      scrub            : 1.5,
-      invalidateOnRefresh: true,   /* recalculates on resize — prevents layout shifts */
+      trigger            : '#hero',
+      start              : 'top top',
+      end                : '+=' + scrollDist,
+      pin                : true,
+      scrub              : scrubVal,
+      invalidateOnRefresh: true,
 
       onUpdate: function(self){
         /* One seek per GSAP frame. GSAP's smoothed progress
