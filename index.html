@@ -833,25 +833,37 @@ footer{
           gsap.to(scrollCue, { opacity:0, duration:0.6, ease:'power2.out' });
       },
 
-      onLeave: function(self){
-        /* Hard-lock to last frame — kill trigger permanently */
-        finished = true;
-        video.currentTime = duration;
-        video.pause();
-        if(progressEl)
-          gsap.to(progressEl, { opacity:0, duration:0.6, delay:0.2, ease:'power2.out' });
-        self.kill();
-      },
-
       onUpdate: function(self){
-        if(finished) return;           /* ignore all updates after end */
+        if(finished){
+          /* Keep forcing end frame — prevents GSAP scrub tween
+             from reverting currentTime when trigger is passed */
+          video.currentTime = duration;
+          return;
+        }
         video.currentTime = self.progress * duration;
         if(progressEl)
           progressEl.style.width = (self.progress * 100) + '%';
       },
 
+      onLeave: function(){
+        /* Set flag FIRST — onUpdate will immediately start
+           clamping to duration on next GSAP tick */
+        finished = true;
+        video.currentTime = duration;
+        video.pause();
+        if(progressEl)
+          gsap.to(progressEl, { opacity:0, duration:0.6, delay:0.2, ease:'power2.out' });
+        /* NOTE: do NOT call self.kill() — killing a scrub ScrollTrigger
+           reverts the internal tween to progress=0, firing onUpdate
+           one final time with progress=0 and resetting the video.
+           The finished flag + forced currentTime=duration handles
+           everything safely without kill(). */
+      },
+
       onEnterBack: function(){
-        if(finished) return;           /* never rewind once done */
+        /* Never rewind — finished flag prevents onUpdate from
+           responding even if GSAP tries to scrub backward */
+        if(finished) return;
         if(progressEl) gsap.set(progressEl, { opacity:1 });
       }
     });
