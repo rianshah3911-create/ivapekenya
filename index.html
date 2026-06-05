@@ -758,9 +758,16 @@ footer{
 
 <script>
 /* ════════════════════════════════════════════════════════════
-   HERO — Stop-Scroll. Bidirectional. Plays once. Freezes.
-   RAF loop runs at 60fps: pauses + seeks in the same tick.
-   iOS gets at most 16ms of play between frames = < 1 frame.
+   HERO — Stop-Scroll. Bidirectional scrub. Plays once. Freezes.
+
+   SHRINK FIX: never touch body layout. Instead, inject a
+   transparent fixed overlay that captures all touch events.
+   No layout reflow = no hero shrinking.
+
+   REPEAT FIX: RAF at 60fps pauses video every 16ms.
+
+   REVERSE FIX: removed the > 0.015 threshold — every seek
+   applied immediately, even tiny backward movements.
    ════════════════════════════════════════════════════════════ */
 (function(){
   var hero  = document.getElementById('hero');
@@ -769,15 +776,15 @@ footer{
   var cue   = document.getElementById('scrollCue');
   if(!hero || !video) return;
 
-  var isMobile  = window.innerWidth <= 768;
-  var done      = false;
-  var TOTAL     = isMobile ? 2500 : 5000;
-  var vs        = 0;          /* virtual scroll, bidirectional 0↔TOTAL */
-  var targetTime= 0;          /* RAF drives video toward this */
-  var endTime   = 0;
-  var rafId     = null;
+  var isMobile = window.innerWidth <= 768;
+  var done     = false;
+  var TOTAL    = isMobile ? 1200 : 3500;
+  var vs       = 0;
+  var endTime  = 0;
+  var rafId    = null;
+  var overlay  = null;
 
-  /* ── Video setup ── */
+  /* ── Video ── */
   video.removeAttribute('loop');
   video.removeAttribute('autoplay');
   video.setAttribute('playsinline','');
@@ -788,97 +795,91 @@ footer{
   video.src = isMobile ? 'images/vape-mobile.mp4' : 'images/vape-desktop.mp4';
   video.load();
 
-  /* ── RAF loop: 60fps pause + seek in ONE tick ──────────────────
-     setInterval every 50ms gave iOS 50ms of free play = full loops.
-     RAF every 16ms gives iOS < 1 video frame of play.            */
+  /* ── RAF: pauses video + applies seek every 16ms ── */
+  var seekTarget = 0;
   function rafLoop(){
-    if(done){ return; }
+    if(done) return;
     rafId = requestAnimationFrame(rafLoop);
-    /* 1. Kill any autoplay iOS started */
-    if(!video.paused) video.pause();
-    /* 2. Seek to target (set by scrub()) */
-    if(Math.abs(video.currentTime - targetTime) > 0.015){
-      video.currentTime = targetTime;
-    }
+    if(!video.paused) video.pause();       /* kill any autoplay */
+    video.currentTime = seekTarget;        /* apply seek — no threshold, instant */
   }
 
-  /* ── Scroll lock ── */
-  function lockScroll(){
-    document.body.style.overflow = 'hidden';
-    document.body.style.position = 'fixed';
-    document.body.style.width    = '100%';
-    document.body.style.top      = '0px';
-    window.scrollTo(0, 0);
-  }
-  function unlockScroll(){
-    document.body.style.overflow = '';
-    document.body.style.position = '';
-    document.body.style.width    = '';
-    document.body.style.top      = '';
-    window.scrollTo(0, hero.offsetTop + hero.offsetHeight);
-  }
-
-  /* ── Scrub: + = forward, − = reverse ── */
+  /* ── Scrub: bidirectional ── */
   function scrub(delta){
     if(done) return;
     vs = Math.max(0, Math.min(TOTAL, vs + delta));
-    var p  = vs / TOTAL;
-    targetTime = p * endTime;            /* RAF will apply this */
-    if(prog) prog.style.width = (p * 100) + '%';
+    seekTarget = (vs / TOTAL) * endTime;
+    if(prog) prog.style.width = (vs / TOTAL * 100) + '%';
     if(vs >= TOTAL) complete();
   }
 
-  /* ── Complete: cancel RAF, freeze, unlock ── */
+  /* ── Complete ── */
   function complete(){
     if(done) return;
     done = true;
     cancelAnimationFrame(rafId);
-    window.removeEventListener('wheel',        onWheel,      false);
-    document.removeEventListener('touchstart', onTouchStart, false);
-    document.removeEventListener('touchmove',  onTouchMove,  false);
+    window.removeEventListener('wheel', onWheel);
+    /* Remove overlay — restores full interaction */
+    if(overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
     video.currentTime = endTime;
     video.pause();
     if(cue) cue.style.opacity = '0';
-    if(prog){
-      prog.style.width = '100%';
-      setTimeout(function(){ prog.style.opacity = '0'; }, 400);
-    }
-    /* Short freeze so user sees final frame, then unlock */
-    setTimeout(unlockScroll, 600);
+    if(prog){ prog.style.width='100%'; setTimeout(function(){ prog.style.opacity='0'; },400); }
+    /* Scroll to content below hero after brief freeze */
+    setTimeout(function(){
+      window.scrollTo(0, hero.offsetTop + hero.offsetHeight);
+    }, 500);
   }
 
-  /* ── Init on metadata ── */
-  video.addEventListener('loadedmetadata', function onMeta(){
-    video.removeEventListener('loadedmetadata', onMeta);
+  /* ── Desktop: wheel ── */
+  function onWheel(e){
+    if(done) return;
+    e.preventDefault();
+    scrub(e.deltaY);
+  }
+
+  video.addEventListener('loadedmetadata', function(){
     var dur = video.duration;
-    if(!dur || isNaN(dur) || dur === Infinity) return;
+    if(!dur || isNaN(dur) || dur===Infinity) return;
     endTime    = Math.max(0, dur - 0.05);
-    targetTime = 0;
+    seekTarget = 0;
     video.currentTime = 0;
     video.pause();
-    lockScroll();
-    rafId = requestAnimationFrame(rafLoop);   /* start 60fps guard */
 
-    /* Desktop: wheel */
-    function onWheel(e){
-      if(done) return;
-      e.preventDefault();
-      scrub(e.deltaY);
-    }
+    /* Start RAF guard */
+    rafId = requestAnimationFrame(rafLoop);
+
+    /* Desktop wheel */
     window.addEventListener('wheel', onWheel, {passive:false});
 
-    /* Mobile: touch — both directions */
-    var ty = 0;
-    function onTouchStart(e){ ty = e.touches[0].clientY; }
-    function onTouchMove(e){
-      if(done) return;
-      e.preventDefault();
-      var dy = ty - e.touches[0].clientY;  /* + up=forward  − down=reverse */
-      ty = e.touches[0].clientY;
-      scrub(dy * 1.5);
+    /* Mobile: transparent overlay captures touch WITHOUT touching body layout
+       so the hero never reflows/shrinks. touch-action:none tells iOS
+       not to handle this touch for scrolling. */
+    if(isMobile){
+      overlay = document.createElement('div');
+      overlay.style.cssText = [
+        'position:fixed',
+        'top:0','left:0','right:0','bottom:0',
+        'z-index:9998',
+        'background:transparent',
+        'touch-action:none'   /* critical: tells iOS not to scroll */
+      ].join(';');
+      document.body.appendChild(overlay);
+
+      var ty = 0;
+      overlay.addEventListener('touchstart', function(e){
+        ty = e.touches[0].clientY;
+      }, {passive:true});
+
+      overlay.addEventListener('touchmove', function(e){
+        if(done) return;
+        e.preventDefault();
+        var dy = ty - e.touches[0].clientY; /* + swipe-up=forward, − swipe-down=reverse */
+        ty = e.touches[0].clientY;
+        scrub(dy * 2.5);
+      }, {passive:false});
     }
-    document.addEventListener('touchstart', onTouchStart, {passive:true});
-    document.addEventListener('touchmove',  onTouchMove,  {passive:false});
+
   }, {once:true});
 
 })();
