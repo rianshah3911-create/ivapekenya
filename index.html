@@ -1,0 +1,933 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IVapeKenya — Premium Vape Store</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<style>
+:root {
+  --bg: #060609;
+  --surface: #0e0e18;
+  --surface2: #13131f;
+  --accent1: #6d28d9;
+  --accent2: #0891b2;
+  --accent3: #db2777;
+  --neon: #8b5cf6;
+  --text: #f4f0ff;
+  --muted: #7c758f;
+  --border: rgba(109,40,217,0.18);
+  --glow1: rgba(109,40,217,0.35);
+  --glow2: rgba(8,145,178,0.28);
+  --wa: #25d366;
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;overflow-x:hidden;}
+
+/* ── NAV ── */
+nav{
+  position:fixed;top:16px;left:50%;transform:translateX(-50%);
+  z-index:1000;
+  height:52px;padding:0 28px;
+  display:inline-flex;align-items:center;justify-content:space-between;gap:32px;
+  width:auto;min-width:0;
+  border-radius:999px;
+  background:rgba(255,255,255,0.14);
+  backdrop-filter:blur(20px) saturate(1.6);
+  -webkit-backdrop-filter:blur(20px) saturate(1.6);
+  border:1px solid rgba(255,255,255,0.38);
+  box-shadow:0 4px 32px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.55);
+}
+.logo{
+  font-family:'Bebas Neue',cursive;font-size:1.8rem;letter-spacing:5px;
+  background:linear-gradient(130deg,var(--accent1),var(--accent2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.logo span{
+  background:linear-gradient(130deg,var(--accent3),var(--accent2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.nav-links{display:flex;gap:32px;list-style:none;}
+.nav-links a{
+  color:rgba(244,240,255,0.7);text-decoration:none;
+  font-family:'Syne',sans-serif;font-size:0.72rem;font-weight:600;
+  letter-spacing:2.5px;text-transform:uppercase;transition:color 0.3s;
+  position:relative;
+}
+.nav-links a::after{
+  content:'';position:absolute;bottom:-3px;left:0;
+  width:0;height:1px;background:var(--accent2);transition:width 0.3s;
+}
+.nav-links a:hover{color:var(--text);}
+.nav-links a:hover::after{width:100%;}
+
+.btn-wa-nav{
+  display:inline-flex;align-items:center;gap:8px;
+  background:var(--wa);color:white;
+  padding:9px 20px;border-radius:40px;
+  font-family:'Syne',sans-serif;font-size:0.72rem;font-weight:700;
+  letter-spacing:1px;text-decoration:none;transition:all 0.3s;
+  box-shadow:0 0 16px rgba(37,211,102,0.25);
+}
+.btn-wa-nav svg{width:15px;height:15px;flex-shrink:0;}
+.btn-wa-nav:hover{box-shadow:0 0 30px rgba(37,211,102,0.5);transform:translateY(-2px);}
+
+/* ── HERO VIDEO ── */
+.hero{
+  position:relative;
+  width:100%;
+  height:100vh;
+  overflow:hidden;
+  /* GSAP ScrollTrigger pin handles positioning — no margin needed */
+}
+.hero video{
+  position:absolute;inset:0;
+  width:100%;height:100%;
+  object-fit:cover;
+  object-position:100% center;
+  display:block;
+}
+/* very subtle vignette only at edges — no brightness kill */
+.hero::after{
+  content:'';
+  position:absolute;inset:0;
+  background:
+    radial-gradient(ellipse at center, transparent 50%, rgba(6,6,9,0.55) 100%),
+    linear-gradient(to bottom, rgba(6,6,9,0.2) 0%, transparent 20%, transparent 75%, rgba(6,6,9,0.9) 100%);
+  pointer-events:none;
+}
+
+/* Stop-scroll progress bar */
+.hero-progress{
+  position:absolute;bottom:0;left:0;
+  height:2px;width:0%;z-index:10;
+  background:linear-gradient(to right,var(--accent1),var(--accent2));
+  transition:width 0.08s linear;
+}
+
+/* Scroll cue */
+.scroll-cue{
+  position:absolute;bottom:32px;left:50%;transform:translateX(-50%);
+  z-index:10;text-align:center;
+  animation:fade-in 1s ease 1.5s both;
+}
+.scroll-cue span{
+  display:block;font-family:'Syne',sans-serif;font-size:0.6rem;
+  letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,0.5);
+  margin-bottom:8px;
+}
+.scroll-mouse{
+  width:22px;height:36px;border:1.5px solid rgba(255,255,255,0.3);
+  border-radius:20px;margin:0 auto;position:relative;
+}
+.scroll-mouse::before{
+  content:'';width:3px;height:8px;border-radius:2px;
+  background:var(--accent2);position:absolute;top:5px;left:50%;transform:translateX(-50%);
+  animation:scroll-wheel 1.8s ease-in-out infinite;
+}
+@keyframes scroll-wheel{0%{opacity:1;transform:translateX(-50%) translateY(0);}100%{opacity:0;transform:translateX(-50%) translateY(12px);}}
+@keyframes fade-in{from{opacity:0;transform:translateX(-50%) translateY(10px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
+
+/* ── DIVIDER LINE ── */
+.divider{
+  height:1px;
+  background:linear-gradient(to right,transparent,var(--accent1),var(--accent2),transparent);
+}
+
+/* ── SHARED SECTION STYLES ── */
+.section-tag{
+  display:inline-flex;align-items:center;gap:12px;
+  font-family:'Syne',sans-serif;font-size:0.68rem;font-weight:700;
+  letter-spacing:3.5px;text-transform:uppercase;color:var(--accent2);
+  margin-bottom:16px;
+}
+.section-tag::before{content:'';width:28px;height:1.5px;background:var(--accent2);}
+
+/* ── ABOUT ── */
+.about-section{
+  padding:110px 72px;
+  display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:center;
+}
+.about-left h2{
+  font-family:'Bebas Neue',cursive;
+  font-size:clamp(3.2rem,5vw,5.5rem);line-height:0.9;letter-spacing:2px;color:var(--text);
+}
+.about-left h2 .hl{
+  background:linear-gradient(130deg,var(--accent1),var(--accent3));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.about-vape-img{
+  margin-top:28px;
+  display:flex;align-items:center;justify-content:flex-start;
+}
+.vape1-img{
+  width:420px;height:auto;
+  max-width:100%;
+  object-fit:contain;
+  image-rendering:auto;
+  filter:drop-shadow(0 0 28px rgba(139,92,246,0.65)) drop-shadow(0 0 12px rgba(8,145,178,0.45));
+  opacity:0.97;
+  transition:filter 0.4s, transform 0.4s;
+}
+.vape1-img:hover{
+  filter:drop-shadow(0 0 42px rgba(139,92,246,0.95)) drop-shadow(0 0 16px rgba(8,145,178,0.7));
+  transform:translateY(-6px) rotate(-3deg);
+}
+.about-right p{font-size:0.95rem;line-height:1.85;color:var(--muted);margin-bottom:18px;}
+.about-right p strong{color:var(--text);font-weight:500;}
+.feature-pills{display:flex;flex-wrap:wrap;gap:10px;margin-top:28px;}
+.pill{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:8px 16px;border-radius:40px;
+  background:rgba(109,40,217,0.1);border:1px solid var(--border);
+  font-family:'Syne',sans-serif;font-size:0.7rem;font-weight:600;letter-spacing:1px;color:var(--accent2);
+  transition:all 0.3s;
+}
+.pill svg{width:13px;height:13px;}
+.pill:hover{background:rgba(109,40,217,0.2);border-color:var(--accent1);transform:translateY(-2px);}
+
+/* ── PRODUCTS ── */
+.products-section{padding:80px 72px 110px;}
+.section-header{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:48px;}
+.section-header h2{
+  font-family:'Bebas Neue',cursive;
+  font-size:clamp(3rem,4.5vw,5rem);line-height:0.9;letter-spacing:2px;color:var(--text);
+}
+.see-all{
+  display:inline-flex;align-items:center;gap:8px;
+  font-family:'Syne',sans-serif;font-size:0.7rem;font-weight:700;
+  letter-spacing:2px;text-transform:uppercase;color:var(--accent2);
+  text-decoration:none;border-bottom:1px solid transparent;padding-bottom:2px;transition:all 0.3s;
+}
+.see-all svg{width:14px;height:14px;transition:transform 0.3s;}
+.see-all:hover{border-color:var(--accent2);}
+.see-all:hover svg{transform:translateX(5px);}
+.products-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;}
+.product-card{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:16px;overflow:hidden;
+  transition:all 0.4s cubic-bezier(0.34,1.56,0.64,1);
+}
+.product-card:hover{
+  transform:translateY(-10px) scale(1.02);
+  border-color:rgba(109,40,217,0.5);
+  box-shadow:0 28px 56px rgba(0,0,0,0.4),0 0 36px var(--glow1);
+}
+.product-card-img{
+  aspect-ratio:1;background:var(--surface2);
+  display:flex;align-items:center;justify-content:center;
+  position:relative;overflow:hidden;
+}
+.product-card-img::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,transparent,rgba(109,40,217,0.08));
+  opacity:0;transition:opacity 0.3s;
+}
+.product-card:hover .product-card-img::after{opacity:1;}
+.prod-icon{
+  color:var(--neon);
+  filter:drop-shadow(0 0 18px rgba(139,92,246,0.45));
+  transition:transform 0.4s;
+}
+.prod-icon svg{width:60px;height:60px;}
+.product-card:hover .prod-icon{transform:scale(1.15) rotate(-4deg);}
+.product-badge{
+  position:absolute;top:12px;left:12px;
+  padding:4px 10px;border-radius:20px;
+  background:linear-gradient(130deg,var(--accent1),var(--neon));
+  font-family:'Syne',sans-serif;font-size:0.58rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:white;
+}
+.product-card-body{padding:20px;}
+.product-brand{font-family:'Syne',sans-serif;font-size:0.62rem;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:var(--accent2);margin-bottom:4px;}
+.product-card-body h3{font-family:'Syne',sans-serif;font-size:0.88rem;font-weight:700;color:var(--text);margin-bottom:5px;}
+.product-desc{font-size:0.75rem;color:var(--muted);line-height:1.55;margin-bottom:16px;}
+.product-footer{display:flex;align-items:center;justify-content:space-between;}
+.product-price{font-family:'Syne',sans-serif;font-weight:800;font-size:0.92rem;color:var(--text);}
+.product-price small{font-size:0.62rem;color:var(--muted);font-weight:400;}
+.add-btn{
+  width:34px;height:34px;border-radius:50%;
+  background:linear-gradient(130deg,var(--accent1),var(--neon));
+  border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;color:white;
+  transition:all 0.3s;box-shadow:0 0 14px var(--glow1);
+}
+.add-btn svg{width:16px;height:16px;}
+.add-btn:hover{transform:scale(1.2) rotate(90deg);box-shadow:0 0 24px var(--glow1);}
+
+/* ── REVIEWS ── */
+.reviews-section{padding:100px 0;position:relative;overflow:hidden;}
+.reviews-section::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse 80% 70% at 50% 50%,rgba(109,40,217,0.05),transparent);
+  pointer-events:none;
+}
+.reviews-header{padding:0 72px;margin-bottom:56px;display:flex;align-items:flex-end;justify-content:space-between;}
+.reviews-header h2{
+  font-family:'Bebas Neue',cursive;
+  font-size:clamp(3rem,4.5vw,5rem);line-height:0.9;letter-spacing:2px;color:var(--text);
+}
+.rating-block{text-align:center;}
+.rating-big{
+  font-family:'Bebas Neue',cursive;font-size:5.5rem;line-height:1;
+  background:linear-gradient(130deg,var(--accent1),var(--accent2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.rating-stars{font-size:1.2rem;letter-spacing:4px;display:block;margin:4px 0;}
+.rating-count{font-family:'Syne',sans-serif;font-size:0.66rem;letter-spacing:2.5px;text-transform:uppercase;color:var(--muted);}
+.reviews-scroll{overflow:hidden;}
+.reviews-track{
+  display:flex;gap:18px;
+  animation:reviews-scroll 35s linear infinite;
+  width:max-content;
+}
+.reviews-track:hover{animation-play-state:paused;}
+@keyframes reviews-scroll{from{transform:translateX(0);}to{transform:translateX(-50%);}}
+.review-card{
+  width:310px;flex-shrink:0;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:16px;padding:28px;
+  position:relative;overflow:hidden;transition:all 0.3s;
+}
+.review-card::before{
+  content:'\201C';
+  position:absolute;top:-8px;right:18px;
+  font-family:'Bebas Neue',cursive;font-size:7rem;line-height:1;
+  color:rgba(109,40,217,0.07);pointer-events:none;
+}
+.review-card:hover{
+  border-color:rgba(109,40,217,0.4);
+  box-shadow:0 18px 36px rgba(0,0,0,0.3),0 0 28px var(--glow1);
+  transform:translateY(-4px);
+}
+.rev-header{display:flex;align-items:center;gap:12px;margin-bottom:14px;}
+.rev-avatar{
+  width:38px;height:38px;border-radius:50%;flex-shrink:0;
+  background:linear-gradient(130deg,var(--accent1),var(--accent2));
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Syne',sans-serif;font-weight:700;font-size:0.85rem;color:white;
+}
+.rev-name{font-family:'Syne',sans-serif;font-size:0.82rem;font-weight:700;color:var(--text);}
+.rev-tag{font-size:0.62rem;color:var(--muted);margin-top:2px;}
+.rev-stars{font-size:0.72rem;letter-spacing:2px;margin-bottom:10px;}
+.rev-text{font-size:0.82rem;line-height:1.72;color:var(--muted);}
+.rev-text strong{color:var(--text);}
+
+/* ── WHY US ── */
+.why-section{
+  padding:110px 72px;
+  display:grid;grid-template-columns:1fr 1fr;gap:72px;align-items:center;
+}
+.why-section::before{
+  content:'';display:block;grid-column:1/-1;
+  height:1px;margin-bottom:0;
+  background:linear-gradient(to right,transparent,var(--border),transparent);
+}
+.why-left h2{
+  font-family:'Bebas Neue',cursive;
+  font-size:clamp(3rem,4.5vw,5rem);line-height:0.9;letter-spacing:2px;color:var(--text);margin-bottom:40px;
+}
+.features-list{display:flex;flex-direction:column;gap:14px;}
+.feature-item{
+  display:flex;align-items:flex-start;gap:18px;padding:22px;
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  transition:all 0.3s;
+}
+.feature-item:hover{border-color:rgba(109,40,217,0.4);transform:translateX(6px);box-shadow:-3px 0 18px var(--glow1);}
+.feature-icon{
+  width:44px;height:44px;flex-shrink:0;border-radius:11px;
+  background:rgba(109,40,217,0.12);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;color:var(--accent2);
+}
+.feature-icon svg{width:20px;height:20px;}
+.feature-text h4{font-family:'Syne',sans-serif;font-size:0.88rem;font-weight:700;color:var(--text);margin-bottom:5px;}
+.feature-text p{font-size:0.78rem;color:var(--muted);line-height:1.6;}
+.big-card{
+  background:linear-gradient(135deg,rgba(109,40,217,0.12),rgba(8,145,178,0.07));
+  border:1px solid rgba(109,40,217,0.25);border-radius:24px;padding:52px 44px;
+  text-align:center;position:relative;overflow:hidden;
+  box-shadow:0 0 60px rgba(109,40,217,0.08);
+}
+.big-card::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(circle at 50% 0%,rgba(109,40,217,0.1),transparent 70%);
+  pointer-events:none;
+}
+.big-card-num{
+  font-family:'Bebas Neue',cursive;font-size:6rem;line-height:1;
+  background:linear-gradient(130deg,var(--accent1),var(--accent2),var(--accent3));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  position:relative;z-index:1;
+}
+.big-card-label{
+  font-family:'Syne',sans-serif;font-size:0.72rem;font-weight:700;
+  letter-spacing:2.5px;text-transform:uppercase;color:var(--muted);
+  margin-top:6px;position:relative;z-index:1;
+}
+.mini-stats{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:28px;position:relative;z-index:1;}
+.mini-stat{background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:12px;padding:16px;}
+.mini-stat .num{font-family:'Bebas Neue',cursive;font-size:1.6rem;color:var(--accent2);}
+.mini-stat .lbl{font-family:'Syne',sans-serif;font-size:0.6rem;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);}
+
+/* ── CTA ── */
+.cta-section{
+  margin:0 72px 80px;padding:80px 72px;
+  background:linear-gradient(135deg,rgba(109,40,217,0.13),rgba(8,145,178,0.07),rgba(219,39,119,0.05));
+  border:1px solid rgba(109,40,217,0.25);border-radius:24px;
+  text-align:center;position:relative;overflow:hidden;
+}
+.cta-section::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(to right,transparent,var(--accent1),var(--accent2),transparent);
+}
+.cta-section h2{
+  font-family:'Bebas Neue',cursive;
+  font-size:clamp(3rem,5.5vw,6rem);letter-spacing:2px;line-height:0.9;color:var(--text);margin-bottom:18px;
+}
+.cta-section h2 .hl{
+  background:linear-gradient(130deg,var(--accent1),var(--accent2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.cta-section p{color:var(--muted);max-width:480px;margin:0 auto 44px;line-height:1.75;font-size:0.95rem;}
+.cta-buttons{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;}
+.btn-primary{
+  display:inline-flex;align-items:center;gap:9px;
+  background:linear-gradient(130deg,var(--accent1),var(--neon));
+  color:white;padding:14px 30px;border-radius:50px;
+  font-family:'Syne',sans-serif;font-weight:700;font-size:0.8rem;letter-spacing:1px;
+  text-decoration:none;transition:all 0.3s;
+  box-shadow:0 0 28px var(--glow1),inset 0 1px 0 rgba(255,255,255,0.18);
+  position:relative;overflow:hidden;
+}
+.btn-primary::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(130deg,transparent,rgba(255,255,255,0.1),transparent);
+  transform:translateX(-100%);transition:transform 0.5s;
+}
+.btn-primary:hover::before{transform:translateX(100%);}
+.btn-primary:hover{transform:translateY(-3px);box-shadow:0 0 48px var(--glow1),0 18px 36px rgba(0,0,0,0.35);}
+.btn-primary svg{width:16px;height:16px;}
+.btn-wa-large{
+  display:inline-flex;align-items:center;gap:10px;
+  background:var(--wa);color:white;padding:14px 30px;border-radius:50px;
+  font-family:'Syne',sans-serif;font-weight:700;font-size:0.8rem;letter-spacing:1px;
+  text-decoration:none;transition:all 0.3s;
+  box-shadow:0 0 22px rgba(37,211,102,0.28);
+}
+.btn-wa-large svg{width:17px;height:17px;}
+.btn-wa-large:hover{box-shadow:0 0 44px rgba(37,211,102,0.55);transform:translateY(-3px);}
+
+/* ── FOOTER ── */
+footer{
+  border-top:1px solid var(--border);padding:64px 72px 0;
+  display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:60px;
+}
+.footer-brand .logo{display:block;margin-bottom:14px;}
+.footer-brand p{color:var(--muted);font-size:0.82rem;line-height:1.75;max-width:270px;}
+.footer-col h4{
+  font-family:'Syne',sans-serif;font-size:0.65rem;font-weight:700;
+  letter-spacing:3px;text-transform:uppercase;color:var(--text);margin-bottom:20px;
+}
+.footer-col ul{list-style:none;display:flex;flex-direction:column;gap:10px;}
+.footer-col ul a{
+  display:inline-flex;align-items:center;gap:7px;
+  color:var(--muted);text-decoration:none;font-size:0.82rem;transition:color 0.3s;
+}
+.footer-col ul a:hover{color:var(--accent2);}
+.footer-bottom{
+  border-top:1px solid var(--border);margin-top:48px;padding:20px 72px;
+  display:flex;align-items:center;justify-content:space-between;
+  font-family:'Syne',sans-serif;font-size:0.68rem;letter-spacing:1px;color:var(--muted);
+}
+.age-badge{
+  background:rgba(219,39,119,0.1);border:1px solid rgba(219,39,119,0.28);
+  border-radius:6px;padding:4px 10px;color:var(--accent3);
+  font-weight:700;letter-spacing:1.5px;font-size:0.65rem;
+}
+
+/* ── WA FLOAT ── */
+.wa-float{
+  position:fixed;bottom:28px;right:28px;z-index:9999;
+  width:54px;height:54px;border-radius:50%;
+  background:var(--wa);display:flex;align-items:center;justify-content:center;
+  box-shadow:0 0 28px rgba(37,211,102,0.4),0 8px 18px rgba(0,0,0,0.35);
+  text-decoration:none;transition:transform 0.3s;
+  animation:wa-pulse 3s ease-in-out infinite;
+}
+.wa-float svg{width:26px;height:26px;color:white;}
+.wa-float:hover{transform:scale(1.12);}
+@keyframes wa-pulse{
+  0%,100%{box-shadow:0 0 28px rgba(37,211,102,0.4),0 8px 18px rgba(0,0,0,0.35);}
+  50%{box-shadow:0 0 50px rgba(37,211,102,0.6),0 8px 18px rgba(0,0,0,0.35);}
+}
+
+/* ── SCROLL REVEAL ── */
+.reveal,.reveal-l,.reveal-r{
+  opacity:0;
+  transition:opacity 0.85s cubic-bezier(0.34,1.56,0.64,1),transform 0.85s cubic-bezier(0.34,1.56,0.64,1);
+}
+.reveal{transform:translateY(40px);}
+.reveal-l{transform:translateX(-40px);}
+.reveal-r{transform:translateX(40px);}
+.reveal.in,.reveal-l.in,.reveal-r.in{opacity:1;transform:translate(0);}
+.stagger>*{
+  opacity:0;transform:translateY(28px);
+  transition:opacity 0.6s cubic-bezier(0.34,1.56,0.64,1),transform 0.6s cubic-bezier(0.34,1.56,0.64,1);
+}
+.stagger.in>*:nth-child(1){opacity:1;transform:none;transition-delay:0s;}
+.stagger.in>*:nth-child(2){opacity:1;transform:none;transition-delay:0.08s;}
+.stagger.in>*:nth-child(3){opacity:1;transform:none;transition-delay:0.16s;}
+.stagger.in>*:nth-child(4){opacity:1;transform:none;transition-delay:0.24s;}
+.stagger.in>*:nth-child(5){opacity:1;transform:none;transition-delay:0.32s;}
+.stagger.in>*:nth-child(6){opacity:1;transform:none;transition-delay:0.4s;}
+.stagger.in>*:nth-child(7){opacity:1;transform:none;transition-delay:0.48s;}
+.stagger.in>*:nth-child(8){opacity:1;transform:none;transition-delay:0.56s;}
+
+/* ── RESPONSIVE TABLET ── */
+@media(max-width:1100px){
+  nav{padding:0 20px;gap:20px;}
+  .hero{margin-top:60px;}
+  .about-section,.why-section{grid-template-columns:1fr;gap:40px;padding:70px 32px;}
+  .products-section{padding:60px 32px 80px;}
+  .products-grid{grid-template-columns:repeat(2,1fr);}
+  .reviews-header{padding:0 32px;flex-direction:column;gap:24px;align-items:flex-start;}
+  footer{grid-template-columns:1fr 1fr;gap:40px;padding:48px 32px 0;}
+  .footer-bottom{padding:20px 32px;}
+  .cta-section{margin:0 32px 60px;padding:52px 32px;}
+  .nav-links{display:none;}
+  .why-section::before{display:none;}
+  .vape1-img{width:300px;}
+}
+
+/* ── RESPONSIVE MOBILE ── */
+@media(max-width:600px){
+  /* Navbar */
+  nav{
+    top:10px;
+    height:44px;
+    padding:0 16px;
+    gap:14px;
+  }
+  .logo{font-size:1.3rem;letter-spacing:3px;}
+  .btn-wa-nav{padding:7px 14px;font-size:0.65rem;}
+
+  /* Hero — GSAP pins it, just control object-position */
+  .hero{
+    height:100vh;
+  }
+  .hero video{
+    object-position:70% center;
+  }
+
+  /* About */
+  .about-section{
+    grid-template-columns:1fr;
+    gap:32px;
+    padding:48px 20px;
+  }
+  .about-left h2{font-size:2.8rem;}
+  .vape1-img{width:240px;}
+  .about-vape-img{justify-content:center;}
+
+  /* Products */
+  .products-section{padding:48px 16px 60px;}
+  .products-grid{grid-template-columns:1fr 1fr;gap:12px;}
+  .section-header{flex-direction:column;align-items:flex-start;gap:12px;margin-bottom:28px;}
+  .product-card-body{padding:14px;}
+  .product-card-body h3{font-size:0.8rem;}
+  .product-desc{font-size:0.7rem;}
+
+  /* Reviews */
+  .reviews-section{padding:48px 0;}
+  .reviews-header{padding:0 20px;flex-direction:column;gap:16px;align-items:flex-start;}
+
+  /* Why */
+  .why-section{grid-template-columns:1fr;gap:32px;padding:48px 20px;}
+  .big-card{padding:32px 24px;}
+
+  /* CTA */
+  .cta-section{margin:0 16px 48px;padding:40px 20px;text-align:center;}
+  .cta-buttons{flex-direction:column;align-items:center;gap:12px;}
+
+  /* Footer */
+  footer{grid-template-columns:1fr;gap:32px;padding:40px 20px 0;}
+  .footer-bottom{padding:16px 20px;flex-direction:column;gap:8px;text-align:center;}
+  .footer-links{flex-wrap:wrap;justify-content:center;}
+}
+</style>
+</head>
+<body>
+
+<!-- WA FLOAT -->
+<a href="https://wa.me/254733983888" target="_blank" class="wa-float" title="Chat on WhatsApp">
+  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.126 1.534 5.857L.057 23.522a.5.5 0 00.625.599l5.826-1.527A11.954 11.954 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.96 0-3.797-.5-5.4-1.376l-.387-.225-4.02 1.054 1.054-3.931-.245-.396A9.956 9.956 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
+</a>
+
+<!-- NAV -->
+<nav id="navbar">
+  <div class="logo">IVape<span>KE</span></div>
+  <ul class="nav-links">
+    <li><a href="#about">About</a></li>
+    <li><a href="#products">Catalog</a></li>
+    <li><a href="#reviews">Reviews</a></li>
+    <li><a href="#contact">Contact</a></li>
+  </ul>
+  <a href="https://wa.me/254733983888" target="_blank" class="btn-wa-nav">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.126 1.534 5.857L.057 23.522a.5.5 0 00.625.599l5.826-1.527A11.954 11.954 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.96 0-3.797-.5-5.4-1.376l-.387-.225-4.02 1.054 1.054-3.931-.245-.396A9.956 9.956 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
+    WhatsApp
+  </a>
+</nav>
+
+<!-- HERO — video only, no text, no buttons -->
+<section class="hero" id="hero">
+  <video muted playsinline preload="auto" id="heroVideo">
+    <source src="images/vape-desktop.mp4" type="video/mp4">
+  </video>
+  <div class="hero-progress" id="heroProgress"></div>
+  <div class="scroll-cue" id="scrollCue">
+    <span>Scroll</span>
+    <div class="scroll-mouse"></div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ABOUT -->
+<section class="about-section" id="about">
+  <div class="about-left reveal-l">
+    <div class="section-tag">About IVK</div>
+    <h2>Nairobi's <span class="hl">Trusted</span><br>Vape Store</h2>
+    <div class="about-vape-img">
+      <img src="images/vape1.png" alt="Vape device" class="vape1-img">
+    </div>
+  </div>
+  <div class="about-right reveal-r">
+    <p>Since <strong>2019</strong>, IVapeKenya has been the go-to vaporizer destination in Nairobi. We stock an extensive range of authentic devices, pods, and e-liquids — sourced directly to guarantee every product is <strong>100% genuine</strong>.</p>
+    <p>Fast deliveries, competitive pricing, and a team that genuinely cares. That's why we carry a perfect 5-star rating from over 18 verified Google reviews.</p>
+    <div class="feature-pills stagger">
+      <span class="pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        Same-Day Delivery
+      </span>
+      <span class="pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        Authentic Products
+      </span>
+      <span class="pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        Quality Guaranteed
+      </span>
+      <span class="pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Responsive Team
+      </span>
+      <span class="pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        Nairobi-Wide
+      </span>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- PRODUCTS -->
+<section class="products-section" id="products">
+  <div class="section-header reveal">
+    <div>
+      <div class="section-tag">Our Collection</div>
+      <h2>Hot<br>Products</h2>
+    </div>
+    <a href="#" class="see-all">
+      View All
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+    </a>
+  </div>
+  <div class="products-grid stagger" id="products-grid"></div>
+</section>
+
+<div class="divider"></div>
+
+<!-- REVIEWS -->
+<section class="reviews-section" id="reviews">
+  <div class="reviews-header reveal">
+    <div>
+      <div class="section-tag">Customer Love</div>
+      <h2>What They<br>Say</h2>
+    </div>
+    <div class="rating-block">
+      <div class="rating-big">5.0</div>
+      <span class="rating-stars">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
+      <span class="rating-count">18+ Verified Google Reviews</span>
+    </div>
+  </div>
+  <div class="reviews-scroll">
+    <div class="reviews-track" id="reviews-track"></div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- WHY US -->
+<section class="why-section">
+  <div class="why-left reveal-l">
+    <h2>Why Choose <span style="background:linear-gradient(130deg,var(--accent1),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">IVapeKE?</span></h2>
+    <div class="features-list stagger" id="features-list"></div>
+  </div>
+  <div class="why-right reveal-r">
+    <div class="big-card">
+      <div class="big-card-num">100%</div>
+      <div class="big-card-label">Authentic Products Guaranteed</div>
+      <div class="mini-stats">
+        <div class="mini-stat"><div class="num">5&#9733;</div><div class="lbl">Rating</div></div>
+        <div class="mini-stat"><div class="num">2019</div><div class="lbl">Est.</div></div>
+        <div class="mini-stat"><div class="num">200+</div><div class="lbl">Products</div></div>
+        <div class="mini-stat"><div class="num">NBO</div><div class="lbl">Nairobi</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- CTA -->
+<section class="cta-section reveal" id="contact">
+  <h2>Ready to <span class="hl">Elevate</span><br>Your Vape?</h2>
+  <p>Order today and get same-day delivery anywhere in Nairobi. Message us on WhatsApp — our team responds fast.</p>
+  <div class="cta-buttons">
+    <a href="https://wa.me/254733983888" target="_blank" class="btn-primary">
+      <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.126 1.534 5.857L.057 23.522a.5.5 0 00.625.599l5.826-1.527A11.954 11.954 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.96 0-3.797-.5-5.4-1.376l-.387-.225-4.02 1.054 1.054-3.931-.245-.396A9.956 9.956 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
+      Chat on WhatsApp
+    </a>
+    <a href="https://wa.me/254733983888?text=Hi%20IVapeKenya%2C%20I%27d%20like%20to%20place%20an%20order." target="_blank" class="btn-wa-large">
+      <svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.126 1.534 5.857L.057 23.522a.5.5 0 00.625.599l5.826-1.527A11.954 11.954 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.96 0-3.797-.5-5.4-1.376l-.387-.225-4.02 1.054 1.054-3.931-.245-.396A9.956 9.956 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
+      Order via WhatsApp
+    </a>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-brand">
+    <span class="logo">IVape<span>KE</span></span>
+    <p>Kenya's premier vaporizer store since 2019. Authentic products, fast delivery, and unmatched service across Nairobi.</p>
+  </div>
+  <div class="footer-col">
+    <h4>Shop</h4>
+    <ul>
+      <li><a href="#">Pod Systems</a></li>
+      <li><a href="#">Disposables</a></li>
+      <li><a href="#">E-Liquids</a></li>
+      <li><a href="#">Accessories</a></li>
+    </ul>
+  </div>
+  <div class="footer-col">
+    <h4>Info</h4>
+    <ul>
+      <li><a href="#">About Us</a></li>
+      <li><a href="#">Delivery Info</a></li>
+      <li><a href="#">Returns</a></li>
+    </ul>
+  </div>
+  <div class="footer-col">
+    <h4>Hours</h4>
+    <ul>
+      <li><a href="#">Mon–Sat: 10:30am–12am</a></li>
+      <li><a href="#">Sunday: 12pm–9pm</a></li>
+      <li><a href="https://wa.me/254733983888" target="_blank">WhatsApp Us</a></li>
+    </ul>
+  </div>
+</footer>
+<div class="footer-bottom">
+  <span>&copy; 2025 IVapeKenya. All rights reserved.</span>
+  <span class="age-badge">18+ Only</span>
+  <span>Vaping products for adults only.</span>
+</div>
+
+<script>
+/* ════════════════════════════════════════════════════
+   HERO — Apple-style smooth scroll-scrub via GSAP
+   ════════════════════════════════════════════════════ */
+(function(){
+  gsap.registerPlugin(ScrollTrigger);
+
+  var video     = document.getElementById('heroVideo');
+  var progressEl= document.getElementById('heroProgress');
+  var scrollCue = document.getElementById('scrollCue');
+
+  if(!video) return;
+
+  /* ── Load video ── */
+  video.innerHTML = '';
+  var s = document.createElement('source');
+  s.src  = 'images/vape-desktop.mp4';
+  s.type = 'video/mp4';
+  video.appendChild(s);
+  video.muted    = true;
+  video.playsInline = true;
+  video.preload  = 'auto';
+  video.load();
+
+  /* ── RAF lerp loop — decouples scroll from video seek ──
+     targetTime  = where scroll says video should be
+     displayTime = smoothly lerping toward targetTime
+     We only call video.currentTime inside the RAF loop,
+     never directly from the scroll event.               */
+  var targetTime  = 0;
+  var displayTime = 0;
+  var duration    = 0;
+  var rafId       = null;
+  var LERP        = 0.12;   /* 0 = instant, 1 = never moves — 0.12 feels premium */
+
+  function rafLoop(){
+    rafId = requestAnimationFrame(rafLoop);
+
+    /* lerp displayTime toward targetTime */
+    var diff = targetTime - displayTime;
+    if(Math.abs(diff) < 0.001){
+      displayTime = targetTime;
+    } else {
+      displayTime += diff * LERP;
+    }
+
+    /* only seek if meaningfully different — avoids redundant decodes */
+    if(Math.abs(video.currentTime - displayTime) > 0.008){
+      video.currentTime = displayTime;
+    }
+  }
+
+  function init(dur){
+    duration = dur;
+    console.log('[Hero] duration:', duration);
+
+    video.pause();
+    video.currentTime = 0;
+
+    /* Start the RAF loop once */
+    if(rafId) cancelAnimationFrame(rafId);
+    rafLoop();
+
+    /* ── ScrollTrigger ──
+       scrub:true = direct 1:1 mapping (no GSAP lag)
+       We handle smoothing ourselves in the RAF loop    */
+    ScrollTrigger.create({
+      trigger     : '#hero',
+      start       : 'top top',
+      end         : '+=5000',
+      pin         : true,
+      scrub       : true,
+      anticipatePin: 1,
+
+      onUpdate: function(self){
+        /* Only update the TARGET — RAF loop moves video smoothly */
+        targetTime = self.progress * duration;
+
+        if(progressEl)
+          progressEl.style.width = (self.progress * 100) + '%';
+
+        console.log('[Hero] scroll progress:', self.progress.toFixed(3),
+                    '| target:', targetTime.toFixed(3),
+                    '| display:', displayTime.toFixed(3));
+      },
+
+      onEnter: function(){
+        if(scrollCue) gsap.to(scrollCue, { opacity:0, duration:0.5 });
+      },
+
+      onLeave: function(){
+        if(progressEl) gsap.to(progressEl, { opacity:0, duration:0.5, delay:0.3 });
+        /* Snap exactly to end frame */
+        targetTime  = duration;
+        displayTime = duration;
+        video.currentTime = duration;
+      },
+
+      onEnterBack: function(){
+        if(progressEl) gsap.set(progressEl, { opacity:1 });
+      }
+    });
+
+    ScrollTrigger.refresh();
+    console.log('[Hero] ScrollTrigger ready');
+  }
+
+  /* Wait for metadata → duration available */
+  video.addEventListener('loadedmetadata', function(){
+    init(video.duration);
+  });
+
+  /* Safari sometimes fires loadedmetadata before addEventListener */
+  if(video.readyState >= 1 && video.duration > 0){
+    init(video.duration);
+  }
+})();
+
+/* ── NAV ── */
+window.addEventListener('scroll', function(){
+  document.getElementById('navbar').classList.toggle('scrolled', window.scrollY > 60);
+});
+
+/* ── PRODUCTS ── */
+var iconSVG = {
+  wind:'<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"/></svg>',
+  zap:'<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
+  droplets:'<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 16.3c2.2 0 4-1.83 4-4.05 0-1.16-.57-2.26-1.71-3.19S7.29 6.75 7 5.3c-.29 1.45-1.14 2.84-2.29 3.76S3 11.1 3 12.25c0 2.22 1.8 4.05 4 4.05z"/><path d="M12.56 6.6A10.97 10.97 0 0 0 14 3.02c.5 2.5 2 4.9 4 6.5s3 3.5 3 5.5a6.98 6.98 0 0 1-11.91 4.97"/></svg>',
+  cpu:'<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>',
+  battery:'<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 18H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3.19M15 6h2a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-3.19"/><line x1="23" y1="13" x2="23" y2="11"/><polyline points="11 6 7 12 13 12 9 18"/></svg>',
+  target:'<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>',
+  flask:'<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v7.527a2 2 0 0 1-.211.896L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.069-10.127A2 2 0 0 1 14 9.527V2"/><line x1="8.5" y1="2" x2="15.5" y2="2"/></svg>',
+  flame:'<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>'
+};
+var products = [
+  {icon:'wind', brand:'SMOK', name:'Nord 5 Pod Kit', desc:'Ergonomic design, smart power, long-lasting battery.', price:'4,500', badge:'Best Seller'},
+  {icon:'zap', brand:'LOST MARY', name:'BM600 Disposable', desc:'600 puffs of authentic flavor, smooth hit every time.', price:'1,200', badge:'Popular'},
+  {icon:'droplets', brand:'NASTY', name:'Salt Nic E-Liquid', desc:'Premium Malaysian salts in 12 exotic flavors. 30ml.', price:'1,800', badge:null},
+  {icon:'cpu', brand:'VAPORESSO', name:'XROS 3 Nano', desc:'Ultra-compact refillable pod — perfect for on-the-go.', price:'5,200', badge:'New'},
+  {icon:'battery', brand:'ELF BAR', name:'BC5000 Rechargeable', desc:'5000 puff rechargeable disposable with USB-C.', price:'2,800', badge:'Hot'},
+  {icon:'target', brand:'UWELL', name:'Caliburn G2', desc:'Draw-activated, 18W power, side refill system.', price:'3,900', badge:null},
+  {icon:'flask', brand:'SALT SWITCH', name:'Freebase 60ml', desc:'Sub-ohm ready in fruit and dessert profiles.', price:'1,500', badge:null},
+  {icon:'flame', brand:'VOOPOO', name:'Drag S Pro', desc:'60W output, GENE.TT chip, stunning premium build.', price:'7,800', badge:'Premium'}
+];
+var grid = document.getElementById('products-grid');
+products.slice(0,4).forEach(function(p){
+  grid.innerHTML += '<div class="product-card"><div class="product-card-img"><div class="prod-icon">'+iconSVG[p.icon]+'</div>'+(p.badge?'<div class="product-badge">'+p.badge+'</div>':'')+'</div><div class="product-card-body"><div class="product-brand">'+p.brand+'</div><h3>'+p.name+'</h3><div class="product-desc">'+p.desc+'</div><div class="product-footer"><div class="product-price"><small>KES </small>'+p.price+'</div><button class="add-btn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button></div></div></div>';
+});
+
+/* ── REVIEWS ── */
+var reviews = [
+  {name:'Angela A.', text:'By far the <strong>best customer service</strong>, timely deliveries and loads of variety. Nahid and team are reliable and efficient!', tag:'Verified Buyer'},
+  {name:'George K.', text:'The <strong>#1 vape plug in Kenya</strong>. High quality products and great customer service — especially the quick deliveries.', tag:'Nairobi'},
+  {name:'Jesse V.', text:'Service and speed of delivery like <strong>no other company</strong> I\'ve dealt with. Absolute pleasure — I remain a loyal customer.', tag:'Loyal Customer'},
+  {name:'Rana K.', text:'Excellent variety of <strong>authentic flavors</strong>. Great friendly service! Highly recommend if you want the best.', tag:'Verified Buyer'},
+  {name:'Saahil S.', text:'Wide variety with <strong>delivery anywhere in Nairobi</strong>. Amazing service, quick transactions and affordable prices.', tag:'Regular Customer'},
+  {name:'Maryanne W.', text:'Great and <strong>fair prices</strong>, good customer service and fast delivery. Would recommend to everyone.', tag:'Happy Customer'},
+  {name:'Yvette A.', text:'Love the variety and their deliveries are <strong>super fast</strong> plus their prices are really good.', tag:'Verified Buyer'},
+  {name:'Sankul M.', text:'Good customer service, <strong>responsive, well priced</strong> and fast delivery. Highly recommended!', tag:'Local Guide'}
+];
+var rt = document.getElementById('reviews-track');
+reviews.concat(reviews).forEach(function(r){
+  rt.innerHTML += '<div class="review-card"><div class="rev-header"><div class="rev-avatar">'+r.name[0]+'</div><div><div class="rev-name">'+r.name+'</div><div class="rev-tag">'+r.tag+'</div></div></div><div class="rev-stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div><div class="rev-text">'+r.text+'</div></div>';
+});
+
+/* ── FEATURES ── */
+var features = [
+  {svg:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>', title:'Same-Day Delivery', desc:'Order before 6pm and receive your vape the same day — anywhere in Nairobi.'},
+  {svg:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><polyline points="20 6 9 17 4 12"/></svg>', title:'Authentic Products Only', desc:'Every device and e-liquid is sourced to be 100% genuine. No fakes, ever.'},
+  {svg:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>', title:'Responsive Support', desc:'Our team replies fast on WhatsApp during all business hours.'},
+  {svg:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>', title:'Best Prices in Nairobi', desc:'Competitive pricing on all products with deals running regularly.'}
+];
+var fl = document.getElementById('features-list');
+features.forEach(function(f){
+  fl.innerHTML += '<div class="feature-item"><div class="feature-icon">'+f.svg+'</div><div class="feature-text"><h4>'+f.title+'</h4><p>'+f.desc+'</p></div></div>';
+});
+
+/* ── SCROLL REVEAL ── */
+var obs = new IntersectionObserver(function(entries){
+  entries.forEach(function(e){ if(e.isIntersecting) e.target.classList.add('in'); });
+}, {threshold:0.1, rootMargin:'0px 0px -50px 0px'});
+document.querySelectorAll('.reveal,.reveal-l,.reveal-r,.stagger').forEach(function(el){ obs.observe(el); });
+</script>
+</body>
+</html>
