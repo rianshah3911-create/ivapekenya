@@ -801,15 +801,6 @@ footer{
   var cueHidden = false;
   var st        = null;   // ScrollTrigger instance
 
-  /* ── iOS / browser play-guard ──────────────────────────────
-     Added once. Immediately pauses any browser-initiated play.
-     After animation completes (animDone) it also resets to endT
-     so iOS can't drift the video back to frame 0.            */
-  video.addEventListener('play', function () {
-    video.pause();
-    if (animDone) video.currentTime = endT;
-  });
-
   /* ── RAF-batched video seek ─────────────────────────────────
      Coalesces multiple rapid onUpdate calls into one actual
      currentTime assignment per animation frame.              */
@@ -864,6 +855,14 @@ footer{
         animDone          = true;
         video.currentTime = endT;
         video.pause();
+
+        /* iOS guard added HERE — never at init, so it cannot block
+           the priming play(). Keeps frozen frame locked on iOS. */
+        video.addEventListener('play', function () {
+          video.pause();
+          video.currentTime = endT;
+        });
+
         if (bar) {
           bar.style.width = '100%';
           setTimeout(function () { if (bar) bar.style.opacity = '0'; }, 600);
@@ -891,13 +890,26 @@ footer{
   function onReady(duration) {
     if (!duration || isNaN(duration) || !isFinite(duration)) return;
 
-    /* Prime first frame: play().then(pause) forces the browser to
-       decode and display frame 0. The play-guard above pauses it
-       immediately; the catch silences the "interrupted" rejection. */
-    video.play().catch(function () {});
-    video.currentTime = 0;
-
+    /* Build ScrollTrigger first so endT is set before any scroll event */
     buildST(duration);
+
+    /* Prime first frame.
+       iOS Safari will NOT render any frame unless play() has fully
+       resolved at least once — setting currentTime on a never-played
+       video produces a permanent black screen. We let play() resolve,
+       then immediately pause and reset to frame 0.                   */
+    var p = video.play();
+    if (p && typeof p.then === 'function') {
+      p.then(function () {
+        video.pause();
+        video.currentTime = 0;
+      }).catch(function () {
+        try { video.currentTime = 0.001; } catch (e) {}
+      });
+    } else {
+      video.pause();
+      video.currentTime = 0;
+    }
   }
 
   /* Handle both cached (readyState≥1) and pending metadata */
