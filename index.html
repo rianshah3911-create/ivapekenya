@@ -24,7 +24,7 @@
   --wa: #25d366;
 }
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
-html{scroll-behavior:smooth;}
+html{scroll-behavior:auto;}
 body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;overflow-x:hidden;}
 
 /* ── NAV ── */
@@ -766,169 +766,173 @@ footer{
 
 <script>
 /* ══════════════════════════════════════════════════════════
-   HERO STOP-SCROLL  ·  Fresh build  ·  hero.mov
+   HERO STOP-SCROLL  ·  GSAP ScrollTrigger rebuild
    ──────────────────────────────────────────────────────────
-   • Forward scroll  → video advances
-   • Reverse scroll  → video goes back
-   • Reaches end     → freezes permanently on last frame
-   • Scroll unlocks  → rest of page scrolls normally
-   • 60 fps RAF      → smooth, never janky
+   Architecture:
+   · ScrollTrigger pins the hero and creates scroll travel space
+   · onUpdate scrubs video.currentTime via RAF-batched seeks
+   · No overlay, no virtual scroll, no window.scrollTo jump
+   · iOS play-guard prevents accidental video resumption
+   · Resize → debounced ScrollTrigger.refresh() for mobile
    ══════════════════════════════════════════════════════════ */
-(function(){
-  if(window.__HERO_INIT) return;   /* single instance guard */
+(function () {
+  'use strict';
+
+  if (window.__HERO_INIT) return;
   window.__HERO_INIT = true;
 
-  var hero  = document.getElementById('hero');
+  gsap.registerPlugin(ScrollTrigger);
+
   var video = document.getElementById('heroVideo');
+  var hero  = document.getElementById('hero');
   var bar   = document.getElementById('heroProgress');
   var cue   = document.getElementById('scrollCue');
-  if(!hero || !video) return;
+  if (!hero || !video) return;
 
-  /* ── state ── */
-  var isMobile = ('ontouchstart' in window) || window.innerWidth <= 768;
-  var TOTAL    = 5000;          /* virtual scroll units for full video */
-  var vs       = 0;             /* current virtual scroll position     */
-  var target   = 0;             /* currentTime the RAF should seek to  */
-  var endT     = 0;             /* duration – 50ms (avoids ended-state)*/
-  var done     = false;
-  var rafId    = null;
-  var overlay  = null;
+  /* ── GPU promote video element ── */
+  video.style.transform         = 'translateZ(0)';
+  video.style.willChange        = 'contents';
+  video.style.backfaceVisibility = 'hidden';
 
-  /* ─────────────────────────────────────────────────────────
-     RAF LOOP  –  runs every ~16 ms
-     • keeps video paused (kills any iOS autoplay)
-     • seeks to `target` only when it has changed
-     No body/layout changes → hero never shrinks             */
-  function tick(){
-    if(done) return;
-    rafId = requestAnimationFrame(tick);
-    if(!video.paused) video.pause();
-    if(Math.abs(video.currentTime - target) > 0.005){
-      video.currentTime = target;
-    }
-  }
+  /* ── State ── */
+  var endT      = 0;      // video.duration - small buffer
+  var pendingT  = null;   // next currentTime value queued for RAF
+  var rafId     = null;   // pending RAF handle
+  var animDone  = false;  // true once user scrolled past end
+  var cueHidden = false;
+  var st        = null;   // ScrollTrigger instance
 
-  /* ─────────────────────────────────────────────────────────
-     SCRUB  –  called by wheel / touch with a signed delta
-     +delta → forward   –delta → reverse                     */
-  function scrub(delta){
-    if(done) return;
-    vs     = Math.max(0, Math.min(TOTAL, vs + delta));
-    target = (vs / TOTAL) * endT;
-    if(bar) bar.style.width = (vs / TOTAL * 100) + '%';
-    if(vs >= TOTAL) freeze();
-  }
-
-  /* ─────────────────────────────────────────────────────────
-     FREEZE  –  called once when animation completes
-     Cancels RAF, removes input handlers, locks video on
-     the last frame with two permanent iOS guards, then
-     releases the scroll so the page continues normally.     */
-  function freeze(){
-    if(done) return;
-    done = true;
-
-    cancelAnimationFrame(rafId);
-    window.removeEventListener('wheel', onWheel);
-    if(overlay){ overlay.remove(); overlay = null; }
-
-    /* hard-lock to last frame */
-    video.currentTime = endT;
-    video.pause();
-
-    /* iOS guard A – if browser ever fires play(), kill it */
-    video.addEventListener('play', function(){
-      video.pause();
-      video.currentTime = endT;
+  /* ── RAF-batched video seek ─────────────────────────────────
+     Coalesces multiple rapid onUpdate calls into one actual
+     currentTime assignment per animation frame.              */
+  function seekTo(t) {
+    pendingT = Math.max(0, Math.min(t, endT));
+    if (rafId !== null) return;
+    rafId = requestAnimationFrame(function () {
+      rafId = null;
+      try { video.currentTime = pendingT; } catch (e) {}
     });
+  }
 
-    /* iOS guard B – if iOS unloads/reloads the video element
-       while off-screen, currentTime resets to 0; restore it */
-    video.addEventListener('timeupdate', function(){
-      if(video.currentTime < endT - 0.5){
+  /* ── Build ScrollTrigger ── */
+  function buildST(duration) {
+    if (st) { st.kill(); st = null; }
+
+    endT     = Math.max(0, duration - 0.05);
+    animDone = false;
+
+    /* Scroll travel: 5× viewport height gives a cinematic pace.
+       Minimum 2500px ensures usability on very short viewports. */
+    var travel = Math.max(window.innerHeight * 5, 2500);
+
+    st = ScrollTrigger.create({
+      trigger      : hero,
+      start        : 'top top',
+      end          : '+=' + travel,
+      pin          : true,
+      pinSpacing   : true,
+      anticipatePin: 1,
+
+      /* Fires on every scroll tick while inside the trigger zone */
+      onUpdate: function (self) {
+        seekTo(self.progress * endT);
+
+        if (bar) bar.style.width = (self.progress * 100) + '%';
+
+        /* Fade scroll cue out once animation starts */
+        if (!cueHidden && self.progress > 0.02) {
+          cueHidden = true;
+          if (cue) { cue.style.transition = 'opacity 0.4s'; cue.style.opacity = '0'; }
+        }
+        /* Restore scroll cue if user scrolls back to very start */
+        if (cueHidden && self.progress < 0.005) {
+          cueHidden = false;
+          if (cue) cue.style.opacity = '1';
+        }
+      },
+
+      /* Scrolled PAST end → freeze final frame, release pin */
+      onLeave: function () {
+        animDone          = true;
         video.currentTime = endT;
         video.pause();
+
+        /* iOS guard: added HERE (not at init) so it never blocks the
+           priming play(). Prevents iOS from resuming the frozen frame. */
+        video.addEventListener('play', function () {
+          video.pause();
+          video.currentTime = endT;
+        });
+
+        if (bar) {
+          bar.style.width = '100%';
+          setTimeout(function () { if (bar) bar.style.opacity = '0'; }, 600);
+        }
+      },
+
+      /* Scrolling back INTO section from below */
+      onEnterBack: function () {
+        animDone = false;
+        if (bar) { bar.style.opacity = '1'; bar.style.width = '100%'; }
+      },
+
+      /* Scrolled back ABOVE the hero (to very top) */
+      onLeaveBack: function () {
+        animDone          = false;
+        video.currentTime = 0;
+        if (bar) bar.style.width = '0%';
+        if (cue) cue.style.opacity = '1';
+        cueHidden = false;
       }
     });
-
-    /* UI feedback */
-    if(cue) cue.style.opacity = '0';
-    if(bar){
-      bar.style.width = '100%';
-      setTimeout(function(){ bar.style.opacity = '0'; }, 500);
-    }
-
-    /* brief pause on last frame → then jump past hero */
-    setTimeout(function(){
-      var top = hero.offsetTop + hero.offsetHeight;
-      window.scrollTo({ top: top, behavior: 'instant' });
-    }, 700);
   }
 
-  /* ── desktop: mouse wheel / trackpad ── */
-  function onWheel(e){
-    if(done) return;
-    e.preventDefault();
-    scrub(e.deltaY);           /* +deltaY = scroll down = forward
-                                  –deltaY = scroll up  = reverse  */
-  }
+  /* ── Init ── */
+  function onReady(duration) {
+    if (!duration || isNaN(duration) || !isFinite(duration)) return;
 
-  /* ── init: wait for video metadata ── */
-  video.addEventListener('loadedmetadata', function(){
-    var dur = video.duration;
-    if(!dur || isNaN(dur) || !isFinite(dur)) return;
+    /* Build ScrollTrigger first so endT is ready for any early onUpdate */
+    buildST(duration);
 
-    endT   = Math.max(0, dur - 0.05);
-    target = 0;
-    video.currentTime = 0;
-
-    /* Play then immediately pause — forces browser to decode + display
-       the first frame. Without this, Chrome shows a black screen
-       because it won't render any frame until play() is called once. */
-    video.play().then(function(){
+    /* Prime first frame.
+       iOS Safari will NOT decode or display ANY frame unless play() has
+       actually resolved at least once — setting currentTime alone on a
+       never-played video produces a black screen. We let play() resolve,
+       then immediately pause and seek back to 0.                        */
+    var p = video.play();
+    if (p && typeof p.then === 'function') {
+      p.then(function () {
+        video.pause();
+        video.currentTime = 0;
+      }).catch(function () {
+        /* Autoplay blocked (rare for muted+playsinline) — best-effort seek */
+        try { video.currentTime = 0.001; } catch (e) {}
+      });
+    } else {
       video.pause();
       video.currentTime = 0;
-    }).catch(function(){
-      video.pause();
-    });
+    }
+  }
 
-    /* start RAF guard */
-    rafId = requestAnimationFrame(tick);
+  /* Handle both cached (readyState≥1) and pending metadata */
+  if (video.readyState >= 1 && video.duration && !isNaN(video.duration)) {
+    onReady(video.duration);
+  } else {
+    video.addEventListener('loadedmetadata', function () {
+      onReady(video.duration);
+    }, { once: true });
+  }
 
-    /* desktop wheel listener */
-    window.addEventListener('wheel', onWheel, { passive: false });
-
-    /* ── mobile: invisible overlay ─────────────────────────
-       Sits on top of everything (z-index 9999).
-       background rgba(0,0,0,0.001) forces iOS hit-testing
-       (fully transparent elements are skipped by iOS).
-       touch-action:none tells iOS not to scroll.
-       No changes to body/html layout → hero never shrinks. */
-    overlay = document.createElement('div');
-    overlay.style.cssText =
-      'position:fixed;top:0;left:0;right:0;bottom:0;' +
-      'z-index:9999;' +
-      'background:rgba(0,0,0,0.001);' +
-      'touch-action:none;' +
-      '-webkit-tap-highlight-color:transparent;';
-    document.body.appendChild(overlay);
-
-    var ty = 0;
-
-    overlay.addEventListener('touchstart', function(e){
-      ty = e.touches[0].clientY;
-    }, { passive: true });
-
-    overlay.addEventListener('touchmove', function(e){
-      if(done) return;
-      e.preventDefault();
-      var dy = ty - e.touches[0].clientY;  /* + = swipe up   = forward
-                                              – = swipe down  = reverse */
-      ty = e.touches[0].clientY;
-      scrub(dy * 3);
-    }, { passive: false });
-
-  }, { once: true });
+  /* ── Resize handler (debounced 300 ms) ─────────────────────
+     Covers iOS address-bar show/hide and device rotation.
+     ScrollTrigger.refresh() recalculates pin positions.      */
+  var resizeTmr = null;
+  window.addEventListener('resize', function () {
+    clearTimeout(resizeTmr);
+    resizeTmr = setTimeout(function () {
+      if (st) ScrollTrigger.refresh();
+    }, 300);
+  });
 
 })();
 
